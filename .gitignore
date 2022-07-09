@@ -1,0 +1,9 @@
+.vscode/
+obj/
+obj_dir/
+*.vcd
+sim
+*.bin
+*.elf
+*.dump
+

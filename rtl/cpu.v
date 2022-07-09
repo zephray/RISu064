@@ -121,6 +121,7 @@ module cpu(
     wire        ip_ix_wb_en;
     wire        ip_ix_valid;
     wire        ip_ix_ready;
+    wire [63:0] ip_ix_forwarding;
     wire [63:0] ix_lsp_pc;
     wire [4:0]  ix_lsp_dst;
     wire        ix_lsp_wb_en;
@@ -131,6 +132,8 @@ module cpu(
     wire [1:0]  ix_lsp_mem_width;
     wire        ix_lsp_valid;
     wire        ix_lsp_ready;
+    wire        lsp_ix_mem_wb_en;
+    wire [4:0]  lsp_ix_mem_dst;
     wire [4:0]  lsp_ix_dst;
     wire [63:0] lsp_ix_result;
     wire [63:0] lsp_ix_pc;
@@ -170,6 +173,7 @@ module cpu(
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
+        .ip_ix_forwarding(ip_ix_forwarding),
         .ip_ix_dst(ip_ix_dst),
         .ip_ix_result(ip_ix_result),
         .ip_ix_pc(ip_ix_pc),
@@ -187,6 +191,8 @@ module cpu(
         .ix_lsp_mem_width(ix_lsp_mem_width),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
+        .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
+        .lsp_ix_mem_dst(lsp_ix_mem_dst),
         .lsp_ix_dst(lsp_ix_dst),
         .lsp_ix_result(lsp_ix_result),
         .lsp_ix_pc(lsp_ix_pc),
@@ -198,7 +204,7 @@ module cpu(
     ip ip0(
         .clk(clk),
         .rst(rst),
-        // From decoder
+        // From issue
         .ix_ip_pc(ix_ip_pc),
         .ix_ip_dst(ix_ip_dst),
         .ix_ip_wb_en(ix_ip_wb_en),
@@ -209,6 +215,8 @@ module cpu(
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
+        // Forwarding path back to issue
+        .ip_ix_forwarding(ip_ix_forwarding),
         // To writeback
         .ip_ix_dst(ip_ix_dst),
         .ip_ix_result(ip_ix_result),
@@ -239,6 +247,9 @@ module cpu(
         .ix_lsp_mem_width(ix_lsp_mem_width),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
+        // To issue for hazard detection
+        .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
+        .lsp_ix_mem_dst(lsp_ix_mem_dst),
         // To writeback
         .lsp_ix_dst(lsp_ix_dst),
         .lsp_ix_result(lsp_ix_result),

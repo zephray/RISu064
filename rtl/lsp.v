@@ -36,7 +36,7 @@ module lsp(
     output reg          dm_req_valid,
     input  wire [63:0]  dm_resp_rdata,
     input  wire         dm_resp_valid,
-    // From decoder
+    // From issue
     input  wire [63:0]  ix_lsp_pc,
     input  wire [4:0]   ix_lsp_dst,
     input  wire         ix_lsp_wb_en,
@@ -47,6 +47,9 @@ module lsp(
     input  wire [1:0]   ix_lsp_mem_width,
     input  wire         ix_lsp_valid,
     output wire         ix_lsp_ready,
+    // To issue for hazard detection
+    output wire         lsp_ix_mem_wb_en,
+    output wire [4:0]   lsp_ix_mem_dst,
     // To writeback
     output reg  [4:0]   lsp_ix_dst,
     output wire [63:0]  lsp_ix_result,
@@ -88,6 +91,10 @@ module lsp(
             dm_req_valid <= 1'b0;
         end
     end
+
+    // For hazard detection
+    assign lsp_ix_mem_wb_en = ag_m_wb_en && dm_req_valid;
+    assign lsp_ix_mem_dst = ag_m_dst;
 
     // Memory stage
     reg [2:0] m_wb_byte_offset;

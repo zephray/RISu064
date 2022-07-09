@@ -29,7 +29,7 @@
 module ip(
     input  wire         clk,
     input  wire         rst,
-    // From decoder
+    // From issue
     input  wire [63:0]  ix_ip_pc,
     input  wire [4:0]   ix_ip_dst,
     input  wire         ix_ip_wb_en,
@@ -40,6 +40,8 @@ module ip(
     input  wire [63:0]  ix_ip_operand2,
     input  wire         ix_ip_valid,
     output wire         ix_ip_ready,
+    // Forwarding path back to issue
+    output wire [63:0]  ip_ix_forwarding,
     // To writeback
     output reg [4:0]    ip_ix_dst,
     output reg [63:0]   ip_ix_result,
@@ -57,6 +59,8 @@ module ip(
         .operand2(ix_ip_operand2),
         .result(alu_result)
     );
+
+    assign ip_ix_forwarding = alu_result;
 
     wire ix_stalled = ip_ix_valid && !ip_ix_ready;
     assign ix_ip_ready = !ix_stalled;

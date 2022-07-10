@@ -22,7 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-module fifo_1d_fwft (
+module fifo_2d_fwft (
     input  wire             clk,
     input  wire             rst,
     input  wire [WIDTH-1:0] a_data,
@@ -35,24 +35,54 @@ module fifo_1d_fwft (
 
     parameter WIDTH = 64;
 
-    reg [WIDTH-1:0] fifo;
+    reg [WIDTH-1:0] fifo_top;
+    reg [WIDTH-1:0] fifo_bottom;
+    reg fifo_empty;
     reg fifo_full;
     always @(posedge clk) begin
         if (rst) begin
             fifo_full <= 1'b0;
+            fifo_empty <= 1'b1;
         end
         else begin
             if (a_ready && a_valid) begin
-                fifo <= a_data;
-                if (!b_ready)
-                    fifo_full <= 1'b1;
+                if (!b_ready) begin
+                    // Enqueue
+                    if (fifo_empty) begin
+                        fifo_top <= a_data;
+                        fifo_empty <= 1'b0;
+                    end
+                    else if (fifo_full) begin
+                        // Cry
+                    end
+                    else begin
+                        fifo_bottom <= fifo_top;
+                        fifo_top <= a_data;
+                        fifo_full <= 1'b1;
+                    end
+                end
+                else begin
+                    // Data coming in and out normally
+                    fifo_top <= a_data;
+                end
             end
-            else if (b_ready)
-                fifo_full <= 1'b0;
+            else if (b_ready) begin
+                // Dequeue
+                if (fifo_empty) begin
+                    // Cry
+                end
+                else if (fifo_full) begin
+                    fifo_top <= fifo_bottom;
+                    fifo_full <= 1'b0;
+                end
+                else begin
+                    fifo_empty <= 1'b1;
+                end
+            end
         end
     end
-    assign b_valid = fifo_full || a_valid;
-    assign b_data = fifo_full ? fifo : a_data;
+    assign b_valid = !fifo_empty || a_valid;
+    assign b_data = fifo_empty ? a_data : fifo_top;
     assign a_ready = b_ready || !fifo_full;
 
 endmodule

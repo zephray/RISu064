@@ -90,13 +90,33 @@
 `define D_OPR2_IMM      2'd1
 
 // Operation type
+// Different types maybe steered into same FU
 `define OT_INT          3'd0
-`define OT_FP           3'd1
+`define OT_BRANCH       3'd1
 `define OT_LOAD         3'd2
 `define OT_STORE        3'd3
-`define OT_CSR          3'd4
-`define OT_MUL          3'd5
+`define OT_MUL          3'd4
+`define OT_CSR          3'd5
+`define OT_FP           3'd6
 
 // Destination availability
 `define DA_MEM          2'd0 // available by the end of EX
 `define DA_WB           2'd1 // available by the end of MEM
+
+// Branch predictor result
+`define BP_NOT_TAKEN    1'b0
+`define BP_TAKEN        1'b1
+
+// Branch instruction type
+`define BT_NONE         2'd0
+`define BT_JAL          2'd1
+`define BT_JALR         2'd2
+`define BT_BCOND        2'd3
+
+// Branch conditions
+`define BC_EQ           3'd0
+`define BC_NE           3'd1
+`define BC_LT           3'd2
+`define BC_GE           3'd3
+`define BC_LTU          3'd4
+`define BC_GEU          3'd5

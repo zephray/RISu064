@@ -41,9 +41,15 @@ module cpu(
     // IF stage
     wire [63:0] if_dec_pc;
     wire [31:0] if_dec_instr;
+    wire        if_dec_bp;
+    wire [63:0] if_dec_bt;
     wire        if_dec_valid;
     wire        if_dec_ready;
-    ifu ifu (
+    wire        ip_if_pc_override;
+    wire [63:0] ip_if_new_pc;
+    wire        pipe_flush = ip_if_pc_override;
+
+    ifp ifp (
         .clk(clk),
         .rst(rst),
         // I-mem interface
@@ -54,15 +60,23 @@ module cpu(
         // Decoder interface
         .if_dec_pc(if_dec_pc),
         .if_dec_instr(if_dec_instr),
+        .if_dec_bp(if_dec_bp),
+        .if_dec_bt(if_dec_bt),
         .if_dec_valid(if_dec_valid),
-        .if_dec_ready(if_dec_ready)
+        .if_dec_ready(if_dec_ready),
+        // Next PC
+        .ip_if_pc_override(ip_if_pc_override),
+        .ip_if_new_pc(ip_if_new_pc)
     );
 
     // Decode stage
     wire [63:0] dec_ix_pc;
+    wire        dec_ix_bp;
+    wire [63:0] dec_ix_bt;
     wire [2:0]  dec_ix_op;
     wire        dec_ix_option;
     wire        dec_ix_truncate;
+    wire [1:0]  dec_ix_br_type;
     wire        dec_ix_mem_sign;
     wire [1:0]  dec_ix_mem_width;
     wire [1:0]  dec_ix_operand1;
@@ -79,16 +93,22 @@ module cpu(
     dec dec(
         .clk(clk),
         .rst(rst),
+        .pipe_flush(pipe_flush),
         // IF interface
         .if_dec_pc(if_dec_pc),
         .if_dec_instr(if_dec_instr),
+        .if_dec_bp(if_dec_bp),
+        .if_dec_bt(if_dec_bt),
         .if_dec_valid(if_dec_valid),
         .if_dec_ready(if_dec_ready),
         // IX interface
         .dec_ix_pc(dec_ix_pc),
+        .dec_ix_bp(dec_ix_bp),
+        .dec_ix_bt(dec_ix_bt),
         .dec_ix_op(dec_ix_op),
         .dec_ix_option(dec_ix_option),
         .dec_ix_truncate(dec_ix_truncate),
+        .dec_ix_br_type(dec_ix_br_type),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_operand1(dec_ix_operand1),
@@ -111,8 +131,12 @@ module cpu(
     wire [2:0]  ix_ip_op;
     wire        ix_ip_option;
     wire        ix_ip_truncate;
+    wire [1:0]  ix_ip_br_type;
+    wire [20:0] ix_ip_boffset;
     wire [63:0] ix_ip_operand1;
     wire [63:0] ix_ip_operand2;
+    wire        ix_ip_bp;
+    wire [63:0] ix_ip_bt;
     wire        ix_ip_valid;
     wire        ix_ip_ready;
     wire [4:0]  ip_ix_dst;
@@ -143,11 +167,15 @@ module cpu(
     ix ix(
         .clk(clk),
         .rst(rst),
+        .pipe_flush(pipe_flush),
         // IX interface
         .dec_ix_pc(dec_ix_pc),
+        .dec_ix_bp(dec_ix_bp),
+        .dec_ix_bt(dec_ix_bt),
         .dec_ix_op(dec_ix_op),
         .dec_ix_option(dec_ix_option),
         .dec_ix_truncate(dec_ix_truncate),
+        .dec_ix_br_type(dec_ix_br_type),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_operand1(dec_ix_operand1),
@@ -169,8 +197,12 @@ module cpu(
         .ix_ip_op(ix_ip_op),
         .ix_ip_option(ix_ip_option),
         .ix_ip_truncate(ix_ip_truncate),
+        .ix_ip_br_type(ix_ip_br_type),
+        .ix_ip_boffset(ix_ip_boffset),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
+        .ix_ip_bp(ix_ip_bp),
+        .ix_ip_bt(ix_ip_bt),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
         .ip_ix_forwarding(ip_ix_forwarding),
@@ -211,8 +243,12 @@ module cpu(
         .ix_ip_op(ix_ip_op),
         .ix_ip_option(ix_ip_option),
         .ix_ip_truncate(ix_ip_truncate),
+        .ix_ip_br_type(ix_ip_br_type),
+        .ix_ip_boffset(ix_ip_boffset),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
+        .ix_ip_bp(ix_ip_bp),
+        .ix_ip_bt(ix_ip_bt),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
         // Forwarding path back to issue
@@ -223,7 +259,10 @@ module cpu(
         .ip_ix_pc(ip_ix_pc),
         .ip_ix_wb_en(ip_ix_wb_en),
         .ip_ix_valid(ip_ix_valid),
-        .ip_ix_ready(ip_ix_ready)
+        .ip_ix_ready(ip_ix_ready),
+        // To instruction fetch unit
+        .ip_if_pc_override(ip_if_pc_override),
+        .ip_if_new_pc(ip_if_new_pc)
     );
 
     lsp lsp(

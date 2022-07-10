@@ -29,16 +29,22 @@
 module dec(
     input  wire         clk,
     input  wire         rst,
+    input  wire         pipe_flush,
     // IF interface
     input  wire [63:0]  if_dec_pc,
     input  wire [31:0]  if_dec_instr,
+    input  wire         if_dec_bp,
+    input  wire [63:0]  if_dec_bt,
     input  wire         if_dec_valid,
     output wire         if_dec_ready,
     // IX interface
     output reg  [63:0]  dec_ix_pc,
+    output reg          dec_ix_bp,
+    output reg  [63:0]  dec_ix_bt,
     output reg  [2:0]   dec_ix_op,
     output reg          dec_ix_option,
     output reg          dec_ix_truncate,
+    output reg  [1:0]   dec_ix_br_type,
     output reg          dec_ix_mem_sign,
     output reg  [1:0]   dec_ix_mem_width,
     output reg  [1:0]   dec_ix_operand1,
@@ -57,6 +63,7 @@ module dec(
     wire [2:0] dec_op;
     wire dec_option;
     wire dec_truncate;
+    wire [1:0] dec_br_type;
     wire dec_mem_sign;
     wire [1:0] dec_mem_width;
     wire [1:0] dec_operand1;
@@ -73,6 +80,7 @@ module dec(
         .op(dec_op),
         .option(dec_option),
         .truncate(dec_truncate),
+        .br_type(dec_br_type),
         .mem_sign(dec_mem_sign),
         .mem_width(dec_mem_width),
         .op_type(dec_op_type),
@@ -91,16 +99,19 @@ module dec(
             dec_ix_valid <= 1'b0;
         end
         else begin
-            dec_ix_valid <= if_dec_valid;
+            dec_ix_valid <= pipe_flush ? 1'b0 : if_dec_valid;
         end
     end
 
     always @(posedge clk) begin
         if (if_dec_ready) begin
             dec_ix_pc <= if_dec_pc;
+            dec_ix_bp <= if_dec_bp;
+            dec_ix_bt <= if_dec_bt;
             dec_ix_op <= dec_op;
             dec_ix_option <= dec_option;
             dec_ix_truncate <= dec_truncate;
+            dec_ix_br_type <= dec_br_type;
             dec_ix_mem_sign <= dec_mem_sign;
             dec_ix_mem_width <= dec_mem_width;
             dec_ix_operand1 <= dec_operand1;

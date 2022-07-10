@@ -31,6 +31,7 @@ module du(
     output reg [2:0] op,
     output reg option,
     output reg truncate,
+    output reg [1:0] br_type,
     // Decoder output specific for LS pipe
     output reg mem_sign,
     output reg [1:0] mem_width,
@@ -70,13 +71,16 @@ module du(
         truncate = 1'bx;
         mem_sign = 1'bx;
         mem_width = 2'bx;
+        br_type = 2'bx;
         op_type = 3'bx;
         operand1 = 2'bx;
         operand2 = 2'bx;
         imm = 64'bx;
         wb_en = 1'bx;
 
+        /* verilator lint_off CASEINCOMPLETE */
         case (opcode)
+        /* verilator lint_on CASEINCOMPLETE */
         // RV-I
         // Int pipe instructions
         `OP_LUI: begin
@@ -86,6 +90,7 @@ module du(
             imm = imm_u_type;
             operand1 = `D_OPR1_ZERO;
             operand2 = `D_OPR2_IMM;
+            br_type = `BT_NONE;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -97,6 +102,7 @@ module du(
             imm = imm_u_type;
             operand1 = `D_OPR1_PC;
             operand2 = `D_OPR2_IMM;
+            br_type = `BT_NONE;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -112,6 +118,7 @@ module du(
             imm = imm_i_type;
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_IMM;
+            br_type = `BT_NONE;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -122,6 +129,7 @@ module du(
             option = funct7[5];
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_RS2;
+            br_type = `BT_NONE;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -136,6 +144,7 @@ module du(
             imm = imm_i_type;
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_IMM;
+            br_type = `BT_NONE;
             truncate = 1'b1;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -146,8 +155,46 @@ module du(
             option = funct7[5];
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_RS2;
+            br_type = `BT_NONE;
             truncate = 1'b1;
             wb_en = 1'b1;
+            legal = 1'b1;
+        end
+        // Branching instructions, executed by integer pipe
+        `OP_JAL: begin
+            op_type = `OT_BRANCH;
+            op = `ALU_ADDSUB;
+            option = `ALUOPT_ADD;
+            imm = imm_j_type;
+            operand1 = `D_OPR1_PC;
+            operand2 = `D_OPR2_IMM;
+            br_type = `BT_JAL;
+            truncate = 1'b0;
+            wb_en = 1'b1;
+            legal = 1'b1;
+        end
+        `OP_JALR: begin
+            op_type = `OT_BRANCH;
+            op = `ALU_ADDSUB;
+            option = `ALUOPT_ADD;
+            imm = imm_i_type;
+            operand1 = `D_OPR1_RS1;
+            operand2 = `D_OPR2_IMM;
+            br_type = `BT_JALR;
+            truncate = 1'b0;
+            wb_en = 1'b1;
+            legal = 1'b1;
+        end
+        `OP_BRANCH: begin
+            op_type = `OT_BRANCH;
+            op = funct3;
+            option = 1'b0;
+            imm = imm_b_type;
+            operand1 = `D_OPR1_RS1;
+            operand2 = `D_OPR2_RS2;
+            br_type = `BT_BCOND;
+            truncate = 1'b0;
+            wb_en = 1'b0;
             legal = 1'b1;
         end
         // LS pipe instructions

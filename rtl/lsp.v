@@ -63,7 +63,7 @@ module lsp(
     wire [63:0] agu_addr;
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
     
-    wire lsp_stalled = dm_req_valid && !dm_resp_valid;
+    wire lsp_stalled = (m_wb_req_valid && !dm_resp_valid) || (!lsp_ix_ready);
     assign ix_lsp_ready = !lsp_stalled;
 
     reg [63:0] ag_m_pc;
@@ -97,30 +97,24 @@ module lsp(
     assign lsp_ix_mem_dst = ag_m_dst;
 
     // Memory stage
+    reg m_wb_req_valid;
+    reg [63:0] m_wb_pc;
+    reg [4:0] m_wb_dst;
+    reg m_wb_wb_en;
     reg [2:0] m_wb_byte_offset;
     reg m_wb_mem_sign;
     reg [1:0] m_wb_mem_width;
     always @(posedge clk) begin
-        lsp_ix_pc <= ag_m_pc;
-        lsp_ix_dst <= ag_m_dst;
-        lsp_ix_wb_en <= ag_m_wb_en;
+        m_wb_req_valid <= dm_req_valid;
+        m_wb_pc <= ag_m_pc;
+        m_wb_dst <= ag_m_dst;
+        m_wb_wb_en <= ag_m_wb_en;
         m_wb_byte_offset <= ag_m_byte_offset;
         m_wb_mem_sign <= ag_m_mem_sign;
         m_wb_mem_width <= ag_m_mem_width;
     end
 
-    wire [63:0] mem_rd;
-    // 1-deep FWFT FIFO
-    fifo_1d_fwft #(.WIDTH(64)) lsp_fifo(
-        .clk(clk),
-        .rst(rst),
-        .a_data(dm_resp_rdata),
-        .a_valid(dm_resp_valid && lsp_ix_wb_en),
-        .a_ready(),
-        .b_data(mem_rd),
-        .b_valid(lsp_ix_valid),
-        .b_ready(lsp_ix_ready)
-    );
+    wire [63:0] mem_rd = dm_resp_rdata;
 
     wire [1:0] m_wb_half_offset = m_wb_byte_offset[2:1];
     wire m_wb_word_offset = m_wb_byte_offset[2];
@@ -153,10 +147,21 @@ module lsp(
     wire [63:0] mem_rd_wu = {32'b0, mem_rd_w};
     wire [63:0] mem_rd_ws = {{32{mem_rd_w[31]}}, mem_rd_w};
 
-    assign lsp_ix_result = 
+    wire [63:0] m_wb_result = 
         (m_wb_mem_width == `MW_BYTE) ? (m_wb_mem_sign ? mem_rd_bu : mem_rd_bs) :
         (m_wb_mem_width == `MW_HALF) ? (m_wb_mem_sign ? mem_rd_hu : mem_rd_hs) :
         (m_wb_mem_width == `MW_WORD) ? (m_wb_mem_sign ? mem_rd_wu : mem_rd_ws) :
         (mem_rd);
+    
+    fifo_2d_fwft #(.WIDTH(134)) lsp_fifo (
+        .clk(clk),
+        .rst(rst),
+        .a_data({m_wb_result, m_wb_pc, m_wb_dst, m_wb_wb_en}),
+        .a_valid(dm_resp_valid),
+        .a_ready(),
+        .b_data({lsp_ix_result, lsp_ix_pc, lsp_ix_dst, lsp_ix_wb_en}),
+        .b_valid(lsp_ix_valid),
+        .b_ready(lsp_ix_ready)
+    );
 
 endmodule

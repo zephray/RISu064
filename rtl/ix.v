@@ -27,11 +27,15 @@
 module ix(
     input  wire         clk,
     input  wire         rst,
+    input  wire         pipe_flush,
     // IX interface
     input  wire [63:0]  dec_ix_pc,
+    input  wire         dec_ix_bp,
+    input  wire [63:0]  dec_ix_bt,
     input  wire [2:0]   dec_ix_op,
     input  wire         dec_ix_option,
     input  wire         dec_ix_truncate,
+    input  wire [1:0]   dec_ix_br_type,
     input  wire         dec_ix_mem_sign,
     input  wire [1:0]   dec_ix_mem_width,
     input  wire [1:0]   dec_ix_operand1,
@@ -53,8 +57,12 @@ module ix(
     output reg  [2:0]   ix_ip_op,
     output reg          ix_ip_option,
     output reg          ix_ip_truncate,
+    output reg  [1:0]   ix_ip_br_type,
+    output reg  [20:0]  ix_ip_boffset,
     output reg  [63:0]  ix_ip_operand1,
     output reg  [63:0]  ix_ip_operand2,
+    output reg          ix_ip_bp,
+    output reg  [63:0]  ix_ip_bt,
     output reg          ix_ip_valid,
     input  wire         ix_ip_ready,
     input  wire [63:0]  ip_ix_forwarding,
@@ -144,13 +152,14 @@ module ix(
 
     wire ix_opr_ready = operand1_ready && operand2_ready;
     wire ix_issue_ip0 = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
-            (dec_ix_op_type == `OT_INT) && (ix_ip_ready);
+            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
+            (ix_ip_ready) && !pipe_flush;
     wire ix_issue_lsp = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
-            (ix_lsp_ready);
+            (ix_lsp_ready) && !pipe_flush;
     wire ix_issue = ix_issue_ip0 || ix_issue_lsp;
 
-    wire ix_stall = dec_ix_valid && !ix_issue;
+    wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
     assign dec_ix_ready = !rst && !ix_stall;
 
     always @(posedge clk) begin
@@ -159,16 +168,23 @@ module ix(
             ix_lsp_valid <= 1'b0;
         end
         else begin
-            ix_ip_valid <= 1'b0;
-            ix_lsp_valid <= 1'b0;
             if (ix_issue_ip0) begin
                 ix_ip_op <= dec_ix_op;
                 ix_ip_option <= dec_ix_option;
                 ix_ip_truncate <= dec_ix_truncate;
+                ix_ip_br_type <= dec_ix_br_type;
+                ix_ip_boffset <= dec_ix_imm[20:0];
                 ix_ip_operand1 <= operand1_value;
                 ix_ip_operand2 <= operand2_value;
+                ix_ip_bp <= dec_ix_bp;
+                ix_ip_bt <= dec_ix_bt;
                 ix_ip_wb_en <= dec_ix_wb_en;
+                ix_ip_dst <= dec_ix_rd;
+                ix_ip_pc <= dec_ix_pc;
                 ix_ip_valid <= 1'b1;
+            end
+            else if (ix_ip_ready) begin
+                ix_ip_valid <= 1'b0;
             end
             if (ix_issue_lsp) begin
                 ix_lsp_base <= operand1_value;
@@ -177,22 +193,22 @@ module ix(
                 ix_lsp_mem_sign <= dec_ix_mem_sign;
                 ix_lsp_mem_width <= dec_ix_mem_width;
                 ix_lsp_wb_en <= dec_ix_wb_en;
+                ix_lsp_dst <= dec_ix_rd;
+                ix_lsp_pc <= dec_ix_pc;
                 ix_lsp_valid <= 1'b1;
             end
+            else if (ix_lsp_ready) begin
+                ix_lsp_valid <= 1'b0;
+            end
         end
-    end
-
-    // Always pass down to the pipe (for single issue)
-    always @(posedge clk) begin
-        ix_ip_dst <= dec_ix_rd;
-        ix_ip_pc <= dec_ix_pc;
-        ix_lsp_dst <= dec_ix_rd;
-        ix_lsp_pc <= dec_ix_pc;
     end
 
     // Writeback
     wire ip_wb_req = ip_ix_valid && ip_ix_wb_en;
     wire lsp_wb_req = lsp_ix_valid && lsp_ix_wb_en;
+    // Retire without writeback
+    wire ip_rwowb_req = ip_ix_valid && !ip_ix_wb_en;
+    wire lsp_rwowb_req = lsp_ix_valid && !lsp_ix_wb_en;
     // Always prefer accepting memory request for now
     wire ip_wb_ac = !lsp_wb_ac && ip_wb_req;
     wire lsp_wb_ac = lsp_wb_req;
@@ -213,11 +229,17 @@ module ix(
                 rf[wb_dst] <= wb_value;
                 $display("PC %016x WB [%d] <- %016x", wb_pc, wb_dst, wb_value);
             end
+            if (ip_rwowb_req) begin
+                $display("PC %016x RETIRE FROM IP", ip_ix_pc);
+            end
+            if (lsp_rwowb_req) begin
+                $display("PC %016x RETIRE FROM LSP", lsp_ix_pc);
+            end
         end
     end
 
-    // for now
-    assign ip_ix_ready = ip_wb_ac;
-    assign lsp_ix_ready = lsp_wb_ac;
+    // Acknowledge accepted wb, always acknowledge retire without writeback
+    assign ip_ix_ready = !(ip_ix_valid && (!ip_wb_ac || ip_rwowb_req));
+    assign lsp_ix_ready = !(lsp_ix_valid && (!lsp_wb_ac && !lsp_rwowb_req));
 
 endmodule

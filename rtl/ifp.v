@@ -58,7 +58,9 @@ module ifp(
     wire bp_result = `BP_NOT_TAKEN;
     wire [63:0] btb_result = 64'bx;
 
-    wire ifp_stalled = (f2_dec_req_valid && !im_resp_valid) || (!if_dec_ready);
+    wire ifp_stalled = ((f2_dec_req_valid && !im_resp_valid) || (!if_dec_ready))
+            && !rst;
+    reg ifp_stalled_last;
     wire [63:0] if_new_pc;
     wire if_pc_override;
 
@@ -84,24 +86,29 @@ module ifp(
         if (rst) begin
             f1_f2_pc <= RESET_VECTOR - 4;
             f1_f2_valid <= 1'b0;
+            ifp_stalled_last <= 1'b0;
         end
         else begin
             // Continue only if pipeline is not stalled
-            if (!ifp_stalled) begin
+            if (!ifp_stalled && !ifp_stalled_last) begin
                 f1_f2_valid <= 1'b1;
                 f1_f2_pc <= next_pc;
                 f1_f2_bp <= bp_result;
                 f1_f2_bt <= btb_result;
             end
             else begin
-                f1_f2_valid <= 1'b0;
+                if (!ifp_stalled && ifp_stalled_last)
+                    f1_f2_valid <= 1'b1;
+                else
+                    f1_f2_valid <= 1'b0;
             end
+            ifp_stalled_last <= ifp_stalled;
         end
     end
 
     // F2: I mem
     assign im_req_addr = f1_f2_pc;
-    assign im_req_valid = f1_f2_valid;
+    assign im_req_valid = f1_f2_valid && !ifp_stalled;
     reg f2_dec_pc_override;
     reg [63:0] f2_dec_pc;
     reg f2_dec_bp;
@@ -109,11 +116,13 @@ module ifp(
     reg f2_dec_req_valid;
 
     always @(posedge clk) begin
-        f2_dec_req_valid <= f1_f2_valid;
-        f2_dec_pc <= f1_f2_pc;
-        f2_dec_bp <= f1_f2_bp;
-        f2_dec_bt <= f1_f2_bt;
-        f2_dec_pc_override <= if_pc_override;
+        if (!ifp_stalled) begin
+            f2_dec_req_valid <= im_req_valid;
+            f2_dec_pc <= f1_f2_pc;
+            f2_dec_bp <= f1_f2_bp;
+            f2_dec_bt <= f1_f2_bt;
+            f2_dec_pc_override <= if_pc_override;
+        end
     end
     
 

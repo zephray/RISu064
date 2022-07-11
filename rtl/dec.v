@@ -99,7 +99,12 @@ module dec(
             dec_ix_valid <= 1'b0;
         end
         else begin
-            dec_ix_valid <= pipe_flush ? 1'b0 : if_dec_valid;
+            if (pipe_flush) begin
+                dec_ix_valid <= 1'b0;
+            end
+            else if (if_dec_ready) begin
+                dec_ix_valid <= if_dec_valid;
+            end
         end
     end
 

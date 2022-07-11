@@ -63,9 +63,13 @@ module lsp(
     wire [63:0] agu_addr;
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
     
-    wire lsp_stalled = (m_wb_req_valid && !dm_resp_valid) || (!lsp_ix_ready);
-    assign ix_lsp_ready = !lsp_stalled;
+    wire lsp_stalled = ((m_wb_req_valid && !dm_resp_valid) || (!lsp_ix_ready))
+            && !rst;
+    reg lsp_stalled_last;
+    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last);
 
+    reg ag_m_valid;
+    reg m_ag_access_cancelled;
     reg [63:0] ag_m_pc;
     reg [4:0] ag_m_dst;
     reg ag_m_wb_en;
@@ -75,20 +79,35 @@ module lsp(
 
     // AG stage
     always @(posedge clk) begin
-        if (ix_lsp_valid) begin
-            dm_req_addr <= agu_addr;
-            dm_req_wdata <= ix_lsp_source;
-            dm_req_wen <= !ix_lsp_wb_en;
-            dm_req_valid <= 1'b1;
-            ag_m_pc <= ix_lsp_pc;
-            ag_m_dst <= ix_lsp_dst;
-            ag_m_wb_en <= ix_lsp_wb_en;
-            ag_m_byte_offset <= agu_addr[2:0];
-            ag_m_mem_sign <= ix_lsp_mem_sign;
-            ag_m_mem_width <= ix_lsp_mem_width;
+        if (rst) begin
+            lsp_stalled_last <= 1'b0;
+            ag_m_valid <= 1'b0;
         end
         else begin
-            dm_req_valid <= 1'b0;
+            if (ix_lsp_valid && ix_lsp_ready) begin
+                dm_req_addr <= agu_addr;
+                dm_req_wdata <= ix_lsp_source;
+                dm_req_wen <= !ix_lsp_wb_en;
+                ag_m_valid <= 1'b1;
+                ag_m_pc <= ix_lsp_pc;
+                ag_m_dst <= ix_lsp_dst;
+                ag_m_wb_en <= ix_lsp_wb_en;
+                ag_m_byte_offset <= agu_addr[2:0];
+                ag_m_mem_sign <= ix_lsp_mem_sign;
+                ag_m_mem_width <= ix_lsp_mem_width;
+            end
+            else begin
+                if (!lsp_stalled && lsp_stalled_last) begin
+                    ag_m_valid <= m_ag_access_cancelled;
+                    m_ag_access_cancelled <= 1'b0;
+                end
+                else
+                    ag_m_valid <= 1'b0;
+            end
+            if (ag_m_valid && lsp_stalled) begin
+                m_ag_access_cancelled <= 1'b1;
+            end
+            lsp_stalled_last <= lsp_stalled;
         end
     end
 
@@ -97,6 +116,7 @@ module lsp(
     assign lsp_ix_mem_dst = ag_m_dst;
 
     // Memory stage
+    assign dm_req_valid = ag_m_valid && !lsp_stalled;
     reg m_wb_req_valid;
     reg [63:0] m_wb_pc;
     reg [4:0] m_wb_dst;
@@ -105,13 +125,15 @@ module lsp(
     reg m_wb_mem_sign;
     reg [1:0] m_wb_mem_width;
     always @(posedge clk) begin
-        m_wb_req_valid <= dm_req_valid;
-        m_wb_pc <= ag_m_pc;
-        m_wb_dst <= ag_m_dst;
-        m_wb_wb_en <= ag_m_wb_en;
-        m_wb_byte_offset <= ag_m_byte_offset;
-        m_wb_mem_sign <= ag_m_mem_sign;
-        m_wb_mem_width <= ag_m_mem_width;
+        if (!lsp_stalled) begin
+            m_wb_req_valid <= dm_req_valid;
+            m_wb_pc <= ag_m_pc;
+            m_wb_dst <= ag_m_dst;
+            m_wb_wb_en <= ag_m_wb_en;
+            m_wb_byte_offset <= ag_m_byte_offset;
+            m_wb_mem_sign <= ag_m_mem_sign;
+            m_wb_mem_width <= ag_m_mem_width;
+        end
     end
 
     wire [63:0] mem_rd = dm_resp_rdata;
@@ -137,8 +159,8 @@ module lsp(
 
 
     wire [7:0] mem_rd_b = mem_rd_bl[m_wb_byte_offset];
-    wire [31:0] mem_rd_w = mem_rd_wl[m_wb_word_offset];
     wire [15:0] mem_rd_h = mem_rd_hl[m_wb_half_offset];
+    wire [31:0] mem_rd_w = mem_rd_wl[m_wb_word_offset];
 
     wire [63:0] mem_rd_bu = {56'b0, mem_rd_b};
     wire [63:0] mem_rd_bs = {{56{mem_rd_b[7]}}, mem_rd_b};

@@ -13,12 +13,10 @@ RTLOBJ := $(RTLOBJDIR)/Vrisu__ALL.a
 CC = g++
 CXX = g++
 LD = g++
-SDL_CONFIG = sdl2-config
 
-LIBS := -lm $(shell $(SDL_CONFIG) --libs)
+LIBS := -lm
 
 COMMONFLAGS := \
-	$(shell $(SDL_CONFIG) --cflags) \
 	-Wall -Og -g
 
 CPPFLAGS := \

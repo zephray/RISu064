@@ -2,7 +2,7 @@
 obj/
 obj_dir/
 *.vcd
-sim
+simulator
 *.bin
 *.elf
 *.dump

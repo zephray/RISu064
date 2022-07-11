@@ -22,17 +22,25 @@
 //
 #pragma once
 
-typedef struct {
+class Memsim {
+public:
+    Memsim(uint64_t base, uint64_t size, bool verbose, int latency);
+    void reset();
+    void load_file(char *fn);
+    void apply(uint64_t addr, uint64_t &rdata, uint64_t wdata, uint8_t we,
+            uint8_t valid, uint8_t &ready);
+private:
+    // Settings
     int latency;
-    int latency_counter;
     uint64_t base;
     uint64_t size;
     bool verbose;
-    uint64_t mem[];
-} MemsimContext;
-
-MemsimContext *memsim_alloc(uint64_t base, uint64_t size, bool verbose,
-        int latency);
-void memsim_reset(MemsimContext &ctx);
-void memsim_apply(MemsimContext &ctx, uint64_t addr, uint64_t &rdata,
-        uint64_t wdata, uint8_t we, uint8_t valid, uint8_t &ready);
+    // Accepted memory request
+    uint64_t req_addr;
+    uint64_t req_wdata;
+    uint8_t req_we;
+    int req_valid;
+    // Other state
+    int latency_counter;
+    uint64_t *mem;
+};

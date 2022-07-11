@@ -25,51 +25,81 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 #include "memsim.h"
 
-MemsimContext *memsim_alloc(uint64_t base, uint64_t size, bool verbose,
-        int latency) {
-    MemsimContext *mem = (MemsimContext *)malloc(sizeof(MemsimContext) + size);
-    mem->base = base;
-    mem->size = size;
-    mem->verbose = verbose;
-    mem->latency = latency;
-    return mem;
+Memsim::Memsim(uint64_t base, uint64_t size, bool verbose, int latency) {
+    this->mem = (uint64_t *)malloc(size);
+    this->base = base;
+    this->size = size;
+    this->verbose = verbose;
+    this->latency = latency;
+    this->latency_counter = 0;
+    this->req_valid = 0;
+    assert((base & 0x7) == 0);
+    assert((size & 0x7) == 0);
 }
 
-void memsim_reset(MemsimContext &ctx) {
-    //
+void Memsim::load_file(char *fn) {
+    FILE *fp;
+    fp = fopen(fn, "rb+");
+    if (!fp) {
+        fprintf(stderr, "Error: unable to open file %s\n", fn);
+        exit(1);
+    }
+    fseek(fp, 0, SEEK_END);
+    size_t fsize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    size_t result = fread((void *)mem, fsize, 1, fp);
+    assert(result == 1);
+    fclose(fp);
 }
 
-void memsim_apply(MemsimContext &ctx, uint64_t addr, uint64_t &rdata,
-        uint64_t wdata, uint8_t we, uint8_t valid, uint8_t &ready) {
+void Memsim::reset() {
+    if (verbose) {
+        fprintf(stderr, "Memory simulator reset\n");
+    }
+    req_valid = 0;
+}
+
+void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata, uint8_t we,
+        uint8_t valid, uint8_t &ready) {
     if (valid) {
-        if (ctx.latency_counter == ctx.latency) {
-            uint64_t raddr;
-            if (addr < ctx.base)
-                return;
-            raddr = addr - ctx.base;
+        req_valid = 1;
+        req_addr = addr;
+        req_wdata = wdata;
+        req_we = we;
+        latency_counter = 0;
+    }
 
-            if (raddr >= ctx.size)
+    if (req_valid) {
+        if (latency_counter == latency) {
+            uint64_t raddr;
+            if (req_addr < base)
+                return;
+            raddr = req_addr - base;
+
+            if (raddr >= size)
                 return;
             
             raddr >>= 3; // only do 64-bit access
 
-            if (we) {
-                if (ctx.verbose)
-                    printf("Memory %08lx W %016lx\n", addr, wdata);
-                ctx.mem[raddr] = wdata;
+            if (req_we) {
+                if (verbose)
+                    printf("Memory %08lx W %016lx\n", req_addr, req_wdata);
+                mem[raddr] = req_wdata;
             }
             else {
-                rdata = ctx.mem[raddr];
-                if (ctx.verbose)
-                    printf("Memory %08lx R %016lx\n", addr, rdata);
+                rdata = mem[raddr];
+                if (verbose)
+                    printf("Memory %08lx R %016lx\n", req_addr, rdata);
             }
+            req_valid = 0;
             ready = 1;
-            ctx.latency_counter = 0;
+            latency_counter = 0;
         }
         else {
-            ctx.latency_counter++;
+            latency_counter++;
         }
     }
     else {

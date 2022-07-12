@@ -53,12 +53,12 @@ module lsp(
     output wire         lsp_ix_mem_wb_en,
     output wire [4:0]   lsp_ix_mem_dst,
     // To writeback
-    output reg  [4:0]   lsp_ix_dst,
-    output wire [63:0]  lsp_ix_result,
-    output reg  [63:0]  lsp_ix_pc,
-    output reg          lsp_ix_wb_en,
-    output wire         lsp_ix_valid,
-    input  wire         lsp_ix_ready,
+    output reg  [4:0]   lsp_wb_dst,
+    output wire [63:0]  lsp_wb_result,
+    output reg  [63:0]  lsp_wb_pc,
+    output reg          lsp_wb_wb_en,
+    output wire         lsp_wb_valid,
+    input  wire         lsp_wb_ready,
     // Exception
     output wire         lsp_unaligned_load,
     output wire         lsp_unaligned_store
@@ -68,7 +68,7 @@ module lsp(
     wire [63:0] agu_addr;
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
     
-    wire lsp_stalled = ((m_wb_req_valid && !dm_resp_valid) || (!lsp_ix_ready))
+    wire lsp_stalled = ((m_wb_req_valid && !dm_resp_valid) || (!lsp_wb_ready))
             && !rst;
     reg lsp_stalled_last;
     assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last);
@@ -222,9 +222,9 @@ module lsp(
         .a_data({m_wb_result, m_wb_pc, m_wb_dst, m_wb_wb_en}),
         .a_valid(dm_resp_valid),
         .a_ready(),
-        .b_data({lsp_ix_result, lsp_ix_pc, lsp_ix_dst, lsp_ix_wb_en}),
-        .b_valid(lsp_ix_valid),
-        .b_ready(lsp_ix_ready)
+        .b_data({lsp_wb_result, lsp_wb_pc, lsp_wb_dst, lsp_wb_wb_en}),
+        .b_valid(lsp_wb_valid),
+        .b_ready(lsp_wb_ready)
     );
 
 endmodule

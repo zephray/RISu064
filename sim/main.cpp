@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
 
     printf("Stop.\n");
     for (int i = 0; i < 31; i++) {
-        printf("R%d = %016lx\n", i + 1, core->rootp->risu__DOT__cpu__DOT__ix__DOT__rf[i]);
+        printf("R%d = %016lx\n", i + 1, core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[i]);
     }
 
     if (enable_trace) {

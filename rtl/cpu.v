@@ -45,6 +45,23 @@ module cpu(
     wire        lsp_unaligned_load;
     wire        lsp_unaligned_store;
 
+    // Register file
+    wire [4:0]  rf_rsrc [0:2-1];
+    wire [63:0] rf_rdata [0:2-1];
+    wire        rf_wen [0:1-1];
+    wire [4:0]  rf_wdst [0:1-1];
+    wire [63:0] rf_wdata [0:1-1];
+
+    rf rf(
+        .clk(clk),
+        .rst(rst),
+        .rf_rsrc(rf_rsrc),
+        .rf_rdata(rf_rdata),
+        .rf_wen(rf_wen),
+        .rf_wdst(rf_wdst),
+        .rf_wdata(rf_wdata)
+    );
+
     // IF stage
     wire [63:0] if_dec_pc;
     wire [31:0] if_dec_instr;
@@ -148,13 +165,13 @@ module cpu(
     wire [63:0] ix_ip_bt;
     wire        ix_ip_valid;
     wire        ix_ip_ready;
-    wire [4:0]  ip_ix_dst;
-    wire [63:0] ip_ix_result;
-    wire [63:0] ip_ix_pc;
-    wire        ip_ix_wb_en;
-    wire        ip_ix_valid;
-    wire        ip_ix_ready;
     wire [63:0] ip_ix_forwarding;
+    wire [4:0]  ip_wb_dst;
+    wire [63:0] ip_wb_result;
+    wire [63:0] ip_wb_pc;
+    wire        ip_wb_wb_en;
+    wire        ip_wb_valid;
+    wire        ip_wb_ready;
     wire [63:0] ix_lsp_pc;
     wire [4:0]  ix_lsp_dst;
     wire        ix_lsp_wb_en;
@@ -168,16 +185,19 @@ module cpu(
     wire        lsp_ix_mem_busy;
     wire        lsp_ix_mem_wb_en;
     wire [4:0]  lsp_ix_mem_dst;
-    wire [4:0]  lsp_ix_dst;
-    wire [63:0] lsp_ix_result;
-    wire [63:0] lsp_ix_pc;
-    wire        lsp_ix_wb_en;
-    wire        lsp_ix_valid;
-    wire        lsp_ix_ready;
+    wire [4:0]  lsp_wb_dst;
+    wire [63:0] lsp_wb_result;
+    wire [63:0] lsp_wb_pc;
+    wire        lsp_wb_wb_en;
+    wire        lsp_wb_valid;
+    wire        lsp_wb_ready;
     ix ix(
         .clk(clk),
         .rst(rst),
         .pipe_flush(pipe_flush),
+        // Register file interface
+        .rf_rsrc(rf_rsrc),
+        .rf_rdata(rf_rdata),
         // IX interface
         .dec_ix_pc(dec_ix_pc),
         .dec_ix_bp(dec_ix_bp),
@@ -217,12 +237,10 @@ module cpu(
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
         .ip_ix_forwarding(ip_ix_forwarding),
-        .ip_ix_dst(ip_ix_dst),
-        .ip_ix_result(ip_ix_result),
-        .ip_ix_pc(ip_ix_pc),
-        .ip_ix_wb_en(ip_ix_wb_en),
-        .ip_ix_valid(ip_ix_valid),
-        .ip_ix_ready(ip_ix_ready),
+        .ip_wb_dst(ip_wb_dst),
+        .ip_wb_result(ip_wb_result),
+        .ip_wb_wb_en(ip_wb_wb_en),
+        .ip_wb_valid(ip_wb_valid),
         // To load/ store pipe
         .ix_lsp_pc(ix_lsp_pc),
         .ix_lsp_dst(ix_lsp_dst),
@@ -237,12 +255,10 @@ module cpu(
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
-        .lsp_ix_dst(lsp_ix_dst),
-        .lsp_ix_result(lsp_ix_result),
-        .lsp_ix_pc(lsp_ix_pc),
-        .lsp_ix_wb_en(lsp_ix_wb_en),
-        .lsp_ix_valid(lsp_ix_valid),
-        .lsp_ix_ready(lsp_ix_ready)
+        .lsp_wb_dst(lsp_wb_dst),
+        .lsp_wb_result(lsp_wb_result),
+        .lsp_wb_wb_en(lsp_wb_wb_en),
+        .lsp_wb_valid(lsp_wb_valid)
     );
 
     ip ip0(
@@ -266,12 +282,12 @@ module cpu(
         // Forwarding path back to issue
         .ip_ix_forwarding(ip_ix_forwarding),
         // To writeback
-        .ip_ix_dst(ip_ix_dst),
-        .ip_ix_result(ip_ix_result),
-        .ip_ix_pc(ip_ix_pc),
-        .ip_ix_wb_en(ip_ix_wb_en),
-        .ip_ix_valid(ip_ix_valid),
-        .ip_ix_ready(ip_ix_ready),
+        .ip_wb_dst(ip_wb_dst),
+        .ip_wb_result(ip_wb_result),
+        .ip_wb_pc(ip_wb_pc),
+        .ip_wb_wb_en(ip_wb_wb_en),
+        .ip_wb_valid(ip_wb_valid),
+        .ip_wb_ready(ip_wb_ready),
         // To instruction fetch unit
         .ip_if_pc_override(ip_if_pc_override),
         .ip_if_new_pc(ip_if_new_pc)
@@ -304,14 +320,37 @@ module cpu(
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
         // To writeback
-        .lsp_ix_dst(lsp_ix_dst),
-        .lsp_ix_result(lsp_ix_result),
-        .lsp_ix_pc(lsp_ix_pc),
-        .lsp_ix_wb_en(lsp_ix_wb_en),
-        .lsp_ix_valid(lsp_ix_valid),
-        .lsp_ix_ready(lsp_ix_ready),
+        .lsp_wb_dst(lsp_wb_dst),
+        .lsp_wb_result(lsp_wb_result),
+        .lsp_wb_pc(lsp_wb_pc),
+        .lsp_wb_wb_en(lsp_wb_wb_en),
+        .lsp_wb_valid(lsp_wb_valid),
+        .lsp_wb_ready(lsp_wb_ready),
         .lsp_unaligned_load(lsp_unaligned_load),
         .lsp_unaligned_store(lsp_unaligned_store)
+    );
+
+    wb wb(
+        .clk(clk),
+        .rst(rst),
+        // To register file
+        .rf_wen(rf_wen),
+        .rf_wdst(rf_wdst),
+        .rf_wdata(rf_wdata),
+        // From integer pipe
+        .ip_wb_dst(ip_wb_dst),
+        .ip_wb_result(ip_wb_result),
+        .ip_wb_pc(ip_wb_pc),
+        .ip_wb_wb_en(ip_wb_wb_en),
+        .ip_wb_valid(ip_wb_valid),
+        .ip_wb_ready(ip_wb_ready),
+        // From load-store pipe
+        .lsp_wb_dst(lsp_wb_dst),
+        .lsp_wb_result(lsp_wb_result),
+        .lsp_wb_pc(lsp_wb_pc),
+        .lsp_wb_wb_en(lsp_wb_wb_en),
+        .lsp_wb_valid(lsp_wb_valid),
+        .lsp_wb_ready(lsp_wb_ready)
     );
 
 endmodule

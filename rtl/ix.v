@@ -28,6 +28,9 @@ module ix(
     input  wire         clk,
     input  wire         rst,
     input  wire         pipe_flush,
+    // Register file interface
+    output wire [4:0]   rf_rsrc [0:2-1],
+    input  wire [63:0]  rf_rdata [0:2-1],
     // IX interface
     input  wire [63:0]  dec_ix_pc,
     input  wire         dec_ix_bp,
@@ -66,13 +69,12 @@ module ix(
     output reg  [63:0]  ix_ip_bt,
     output reg          ix_ip_valid,
     input  wire         ix_ip_ready,
+    // Hazard detection & Bypassing
     input  wire [63:0]  ip_ix_forwarding,
-    input  wire [4:0]   ip_ix_dst,
-    input  wire [63:0]  ip_ix_result,
-    input  wire [63:0]  ip_ix_pc,
-    input  wire         ip_ix_wb_en,
-    input  wire         ip_ix_valid,
-    output wire         ip_ix_ready,
+    input  wire [4:0]   ip_wb_dst,
+    input  wire [63:0]  ip_wb_result,
+    input  wire         ip_wb_wb_en,
+    input  wire         ip_wb_valid,
     // To load/ store pipe
     output reg  [63:0]  ix_lsp_pc,
     output reg  [4:0]   ix_lsp_dst,
@@ -84,60 +86,55 @@ module ix(
     output reg  [1:0]   ix_lsp_mem_width,
     output reg          ix_lsp_valid,
     input  wire         ix_lsp_ready,
+    // Hazard detection & Bypassing
     input  wire         lsp_ix_mem_busy,
     input  wire         lsp_ix_mem_wb_en,
     input  wire [4:0]   lsp_ix_mem_dst,
-    input  wire [4:0]   lsp_ix_dst,
-    input  wire [63:0]  lsp_ix_result,
-    input  wire [63:0]  lsp_ix_pc,
-    input  wire         lsp_ix_wb_en,
-    input  wire         lsp_ix_valid,
-    output wire         lsp_ix_ready
+    input  wire [4:0]   lsp_wb_dst,
+    input  wire [63:0]  lsp_wb_result,
+    input  wire         lsp_wb_wb_en,
+    input  wire         lsp_wb_valid
 );
 
-    // Regfile
-    reg [63:0] rf [31:1];
-
     // Hazard detection
-    wire [4:0] ix_rs [0:1];
-    assign ix_rs[0] = dec_ix_rs1;
-    assign ix_rs[1] = dec_ix_rs2;
+    assign rf_rsrc[0] = dec_ix_rs1;
+    assign rf_rsrc[1] = dec_ix_rs2;
     reg [0:0] rs_ready [0:1];
     reg [63:0] rs_val [0:63];
     wire lsp_ag_active = ix_lsp_valid;
     wire lsp_mem_active = lsp_ix_mem_busy;
-    wire lsp_wb_active = lsp_ix_valid && lsp_ix_wb_en;
+    wire lsp_wb_active = lsp_wb_valid && lsp_wb_wb_en;
     genvar i;
     generate
         for (i = 0; i < 2; i = i + 1) begin
             always @(*) begin
                 rs_ready[i] = 1'b1;
                 // Register read
-                rs_val[i] = (ix_rs[i] == 5'd0) ? (64'd0) : rf[ix_rs[i]];
+                rs_val[i] = (rf_rsrc[i] == 5'd0) ? (64'd0) : rf_rdata[i];
                 // Forwarding point: IP execution
                 if (ix_ip_valid && ix_ip_wb_en &&
-                        (ix_ip_dst == ix_rs[i])) begin
+                        (ix_ip_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
                     rs_val[i] = ip_ix_forwarding;
                 end
                 // Forwarding point: IP writeback
-                if (ip_ix_valid && ip_ix_wb_en && (ip_ix_dst == ix_rs[i])) begin
+                if (ip_wb_valid && ip_wb_wb_en && (ip_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
-                    rs_val[i] = ip_ix_result;
+                    rs_val[i] = ip_wb_result;
                 end
                 // Stall point: LSP address generation
                 if (lsp_ag_active && ix_lsp_wb_en &&
-                        (ix_lsp_dst == ix_rs[i])) begin
+                        (ix_lsp_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b0;
                 end
                 // Stall point: LSP memory access active
-                if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == ix_rs[i])) begin
+                if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b0;
                 end
                 // Forwarding point: LSP writeback
-                if (lsp_wb_active && (lsp_ix_dst == ix_rs[i])) begin
+                if (lsp_wb_active && (lsp_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
-                    rs_val[i] = lsp_ix_result;
+                    rs_val[i] = lsp_wb_result;
                 end
             end
         end
@@ -211,44 +208,4 @@ module ix(
             end
         end
     end
-
-    // Writeback
-    wire ip_wb_req = ip_ix_valid && ip_ix_wb_en;
-    wire lsp_wb_req = lsp_ix_valid && lsp_ix_wb_en;
-    // Retire without writeback
-    wire ip_rwowb_req = ip_ix_valid && !ip_ix_wb_en;
-    wire lsp_rwowb_req = lsp_ix_valid && !lsp_ix_wb_en;
-    // Always prefer accepting memory request for now
-    wire ip_wb_ac = !lsp_wb_ac && ip_wb_req;
-    wire lsp_wb_ac = lsp_wb_req;
-
-    wire wb_active = ip_wb_ac || lsp_wb_ac;
-    wire [4:0] wb_dst =
-            (ip_wb_ac) ? ip_ix_dst :
-            (lsp_wb_ac) ? lsp_ix_dst : 5'bx;
-    wire [63:0] wb_value =
-            (ip_wb_ac) ? ip_ix_result :
-            (lsp_wb_ac) ? lsp_ix_result : 64'bx;
-    wire [63:0] wb_pc =
-            (ip_wb_ac) ? ip_ix_pc :
-            (lsp_wb_ac) ? lsp_ix_pc : 64'bx;
-    always @(posedge clk) begin
-        begin
-            if (wb_active) begin
-                rf[wb_dst] <= wb_value;
-                $display("PC %016x WB [%d] <- %016x", wb_pc, wb_dst, wb_value);
-            end
-            if (ip_rwowb_req) begin
-                $display("PC %016x RETIRE FROM IP", ip_ix_pc);
-            end
-            if (lsp_rwowb_req) begin
-                $display("PC %016x RETIRE FROM LSP", lsp_ix_pc);
-            end
-        end
-    end
-
-    // Acknowledge accepted wb, always acknowledge retire without writeback
-    assign ip_ix_ready = !(ip_ix_valid && (!ip_wb_ac && !ip_rwowb_req));
-    assign lsp_ix_ready = !(lsp_ix_valid && (!lsp_wb_ac && !lsp_rwowb_req));
-
 endmodule

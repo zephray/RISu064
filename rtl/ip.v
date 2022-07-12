@@ -47,12 +47,12 @@ module ip(
     // Forwarding path back to issue
     output wire [63:0]  ip_ix_forwarding,
     // To writeback
-    output reg  [4:0]   ip_ix_dst,
-    output reg  [63:0]  ip_ix_result,
-    output reg  [63:0]  ip_ix_pc,
-    output reg          ip_ix_wb_en,
-    output reg          ip_ix_valid,
-    input  wire         ip_ix_ready,
+    output reg  [4:0]   ip_wb_dst,
+    output reg  [63:0]  ip_wb_result,
+    output reg  [63:0]  ip_wb_pc,
+    output reg          ip_wb_wb_en,
+    output reg          ip_wb_valid,
+    input  wire         ip_wb_ready,
     // To instruction fetch unit
     output wire         ip_if_pc_override,
     output wire [63:0]  ip_if_new_pc
@@ -124,30 +124,30 @@ module ip(
 
     assign ip_ix_forwarding = alu_result;
 
-    assign ix_ip_ready = ip_ix_ready;
+    assign ix_ip_ready = ip_wb_ready;
 
     always @(posedge clk) begin
         if (rst) begin
-            ip_ix_valid <= 1'b0;
+            ip_wb_valid <= 1'b0;
         end
         else begin
             if (ix_ip_ready) begin
-                ip_ix_valid <= ix_ip_valid;
+                ip_wb_valid <= ix_ip_valid;
             end
-            else if (ip_ix_ready && ip_ix_valid) begin
-                ip_ix_valid <= 1'b0;
+            else if (ip_wb_ready && ip_wb_valid) begin
+                ip_wb_valid <= 1'b0;
             end
         end
     end
 
     always @(posedge clk) begin
         if (ix_ip_ready) begin
-            ip_ix_dst <= ix_ip_dst;
-            ip_ix_result <= (ix_ip_truncate) ?
+            ip_wb_dst <= ix_ip_dst;
+            ip_wb_result <= (ix_ip_truncate) ?
                 {{32{alu_result[31]}}, alu_result[31:0]} :
                 alu_result;
-            ip_ix_pc <= ix_ip_pc;
-            ip_ix_wb_en <= ix_ip_wb_en;
+            ip_wb_pc <= ix_ip_pc;
+            ip_wb_wb_en <= ix_ip_wb_en;
         end
     end
 

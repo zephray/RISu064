@@ -31,13 +31,20 @@ module cpu(
     output wire         im_req_valid,
     input  wire [63:0]  im_resp_rdata,
     input  wire         im_resp_valid,
+    output wire         im_invalidate_req,
+    input  wire         im_invalidate_resp,
     output wire [63:0]  dm_req_addr,
     output wire [63:0]  dm_req_wdata,
+    output wire [7:0]   dm_req_wmask,
     output wire         dm_req_wen,
     output wire         dm_req_valid,
     input  wire [63:0]  dm_resp_rdata,
     input  wire         dm_resp_valid
 );
+    // TODO
+    wire        lsp_unaligned_load;
+    wire        lsp_unaligned_store;
+
     // IF stage
     wire [63:0] if_dec_pc;
     wire [31:0] if_dec_instr;
@@ -88,6 +95,7 @@ module cpu(
     wire [4:0]  dec_ix_rs1;
     wire [4:0]  dec_ix_rs2;
     wire [4:0]  dec_ix_rd;
+    wire        dec_ix_fencei;
     wire        dec_ix_valid;
     wire        dec_ix_ready;
     dec dec(
@@ -120,6 +128,7 @@ module cpu(
         .dec_ix_rs1(dec_ix_rs1),
         .dec_ix_rs2(dec_ix_rs2),
         .dec_ix_rd(dec_ix_rd),
+        .dec_ix_fencei(dec_ix_fencei),
         .dec_ix_valid(dec_ix_valid),
         .dec_ix_ready(dec_ix_ready)
     );
@@ -156,6 +165,7 @@ module cpu(
     wire [1:0]  ix_lsp_mem_width;
     wire        ix_lsp_valid;
     wire        ix_lsp_ready;
+    wire        lsp_ix_mem_busy;
     wire        lsp_ix_mem_wb_en;
     wire [4:0]  lsp_ix_mem_dst;
     wire [4:0]  lsp_ix_dst;
@@ -187,6 +197,7 @@ module cpu(
         .dec_ix_rs1(dec_ix_rs1),
         .dec_ix_rs2(dec_ix_rs2),
         .dec_ix_rd(dec_ix_rd),
+        .dec_ix_fencei(dec_ix_fencei),
         .dec_ix_valid(dec_ix_valid),
         .dec_ix_ready(dec_ix_ready),
         // FU interfaces
@@ -223,6 +234,7 @@ module cpu(
         .ix_lsp_mem_width(ix_lsp_mem_width),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
+        .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
         .lsp_ix_dst(lsp_ix_dst),
@@ -271,6 +283,7 @@ module cpu(
         // D-mem interface
         .dm_req_addr(dm_req_addr),
         .dm_req_wdata(dm_req_wdata),
+        .dm_req_wmask(dm_req_wmask),
         .dm_req_wen(dm_req_wen),
         .dm_req_valid(dm_req_valid),
         .dm_resp_rdata(dm_resp_rdata),
@@ -287,6 +300,7 @@ module cpu(
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
         // To issue for hazard detection
+        .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
         // To writeback
@@ -295,7 +309,9 @@ module cpu(
         .lsp_ix_pc(lsp_ix_pc),
         .lsp_ix_wb_en(lsp_ix_wb_en),
         .lsp_ix_valid(lsp_ix_valid),
-        .lsp_ix_ready(lsp_ix_ready)
+        .lsp_ix_ready(lsp_ix_ready),
+        .lsp_unaligned_load(lsp_unaligned_load),
+        .lsp_unaligned_store(lsp_unaligned_store)
     );
 
 endmodule

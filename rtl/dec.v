@@ -56,6 +56,7 @@ module dec(
     output reg  [4:0]   dec_ix_rs1,
     output reg  [4:0]   dec_ix_rs2,
     output reg  [4:0]   dec_ix_rd,
+    output reg          dec_ix_fencei,
     output reg          dec_ix_valid,
     input  wire         dec_ix_ready
 );
@@ -75,6 +76,7 @@ module dec(
     wire [4:0] dec_rs1;
     wire [4:0] dec_rs2;
     wire [4:0] dec_rd;
+    wire dec_fencei;
     du du0(
         .instr(if_dec_instr),
         .op(dec_op),
@@ -91,7 +93,8 @@ module dec(
         .wb_en(dec_wb_en),
         .rs1(dec_rs1),
         .rs2(dec_rs2),
-        .rd(dec_rd)
+        .rd(dec_rd),
+        .fencei(dec_fencei)
     );
 
     always @(posedge clk) begin
@@ -128,6 +131,7 @@ module dec(
             dec_ix_rs1 <= dec_rs1;
             dec_ix_rs2 <= dec_rs2;
             dec_ix_rd <= dec_rd;
+            dec_ix_fencei <= dec_fencei;
         end
     end
 

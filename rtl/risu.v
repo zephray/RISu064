@@ -34,6 +34,7 @@ module risu(
     output wire [63:0] dm_addr,
     input wire [63:0] dm_rdata,
     output wire [63:0] dm_wdata,
+    output wire [7:0] dm_wmask,
     output wire dm_wen,
     output wire dm_valid,
     input wire dm_ready
@@ -49,6 +50,7 @@ module risu(
         .im_resp_valid(im_ready),
         .dm_req_addr(dm_addr),
         .dm_req_wdata(dm_wdata),
+        .dm_req_wmask(dm_wmask),
         .dm_req_wen(dm_wen),
         .dm_req_valid(dm_valid),
         .dm_resp_rdata(dm_rdata),

@@ -102,7 +102,8 @@ module ip(
         // Test if branch prediction is correct or not
         wire br_correct = (br_take == ix_ip_bp) &&
                 ((br_take) ? (br_target == ix_ip_bt) : 1'b1);
-        assign ip_if_pc_override = (ix_ip_br_type != `BT_NONE)&&(!br_correct);
+        assign ip_if_pc_override = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE)
+                && (!br_correct);
         assign ip_if_new_pc = br_target;
     end
     else begin
@@ -123,20 +124,30 @@ module ip(
 
     assign ip_ix_forwarding = alu_result;
 
-    assign ix_ip_ready = !(ip_ix_valid && !ip_ix_ready);
+    assign ix_ip_ready = ip_ix_ready;
 
     always @(posedge clk) begin
-        if (ix_ip_valid && ix_ip_ready) begin
+        if (rst) begin
+            ip_ix_valid <= 1'b0;
+        end
+        else begin
+            if (ix_ip_ready) begin
+                ip_ix_valid <= ix_ip_valid;
+            end
+            else if (ip_ix_ready && ip_ix_valid) begin
+                ip_ix_valid <= 1'b0;
+            end
+        end
+    end
+
+    always @(posedge clk) begin
+        if (ix_ip_ready) begin
             ip_ix_dst <= ix_ip_dst;
             ip_ix_result <= (ix_ip_truncate) ?
                 {{32{alu_result[31]}}, alu_result[31:0]} :
                 alu_result;
             ip_ix_pc <= ix_ip_pc;
             ip_ix_wb_en <= ix_ip_wb_en;
-            ip_ix_valid <= ix_ip_valid;
-        end
-        else if (ip_ix_valid && ip_ix_ready) begin
-            ip_ix_valid <= 1'b0;
         end
     end
 

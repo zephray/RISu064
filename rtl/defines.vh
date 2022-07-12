@@ -85,6 +85,7 @@
 `define D_OPR1_RS1      2'd0
 `define D_OPR1_ZERO     2'd1
 `define D_OPR1_PC       2'd2
+`define D_OPR1_ZIMM     2'd3
 
 `define D_OPR2_RS2      2'd0
 `define D_OPR2_IMM      2'd1
@@ -95,9 +96,10 @@
 `define OT_BRANCH       3'd1
 `define OT_LOAD         3'd2
 `define OT_STORE        3'd3
-`define OT_MUL          3'd4
-`define OT_CSR          3'd5
-`define OT_FP           3'd6
+`define OT_FENCE        3'd4
+`define OT_MUL          3'd5
+`define OT_CSR          3'd6
+`define OT_FP           3'd7
 
 // Destination availability
 `define DA_MEM          2'd0 // available by the end of EX
@@ -120,3 +122,8 @@
 `define BC_GE           3'd3
 `define BC_LTU          3'd4
 `define BC_GEU          3'd5
+
+// CSR operations
+`define CSR_RW          2'd1
+`define CSR_RS          2'd2
+`define CSR_RC          2'd3

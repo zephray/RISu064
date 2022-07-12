@@ -32,6 +32,7 @@ module lsp(
     // D-mem interface
     output reg  [63:0]  dm_req_addr,
     output reg  [63:0]  dm_req_wdata,
+    output reg  [7:0]   dm_req_wmask,
     output reg          dm_req_wen,
     output reg          dm_req_valid,
     input  wire [63:0]  dm_resp_rdata,
@@ -48,6 +49,7 @@ module lsp(
     input  wire         ix_lsp_valid,
     output wire         ix_lsp_ready,
     // To issue for hazard detection
+    output wire         lsp_ix_mem_busy,
     output wire         lsp_ix_mem_wb_en,
     output wire [4:0]   lsp_ix_mem_dst,
     // To writeback
@@ -56,7 +58,10 @@ module lsp(
     output reg  [63:0]  lsp_ix_pc,
     output reg          lsp_ix_wb_en,
     output wire         lsp_ix_valid,
-    input  wire         lsp_ix_ready
+    input  wire         lsp_ix_ready,
+    // Exception
+    output wire         lsp_unaligned_load,
+    output wire         lsp_unaligned_store
 );
 
     // AGU
@@ -77,6 +82,41 @@ module lsp(
     reg ag_m_mem_sign;
     reg [1:0] ag_m_mem_width;
 
+    // Mask and data generation
+    wire handshaking = ix_lsp_valid && ix_lsp_ready;
+    wire ualign_h = (ix_lsp_mem_width == `MW_HALF) && (agu_addr[0] != 1'b0);
+    wire ualign_w = (ix_lsp_mem_width == `MW_WORD) && (agu_addr[1:0] != 2'b0);
+    wire ualign_d = (ix_lsp_mem_width == `MW_DOUBLE) && (agu_addr[2:0] != 3'b0);
+    wire ualign = ualign_h || ualign_w || ualign_d;
+    assign lsp_unaligned_load = handshaking && !ix_lsp_wb_en && ualign;
+    assign lsp_unaligned_store = handshaking && ix_lsp_wb_en && ualign;
+
+    wire [63:0] mem_wdata =
+            (ix_lsp_mem_width == `MW_BYTE) ? {8{ix_lsp_source[7:0]}} :
+            (ix_lsp_mem_width == `MW_HALF) ? {4{ix_lsp_source[15:0]}} :
+            (ix_lsp_mem_width == `MW_WORD) ? {2{ix_lsp_source[31:0]}} :
+            ix_lsp_source;
+    wire [7:0] mem_wmask_byte;
+    wire [7:0] mem_wmask_half;
+    wire [7:0] mem_wmask_word;
+    genvar i;
+    generate
+    for (i = 0; i < 8; i = i + 1) begin
+        assign mem_wmask_byte[i] = (agu_addr[2:0] == i);
+    end
+    for (i = 0; i < 4; i = i + 1) begin
+        assign mem_wmask_half[i*2+1:i*2] = {2{mem_wmask_byte[i*2]}};
+    end
+    for (i = 0; i < 2; i = i + 1) begin
+        assign mem_wmask_word[i*4+3:i*4] = {4{mem_wmask_byte[i*4]}};
+    end
+    endgenerate
+    wire [7:0] mem_wmask =
+            (ix_lsp_mem_width == `MW_BYTE) ? mem_wmask_byte :
+            (ix_lsp_mem_width == `MW_HALF) ? mem_wmask_half :
+            (ix_lsp_mem_width == `MW_WORD) ? mem_wmask_word :
+            8'hff;
+
     // AG stage
     always @(posedge clk) begin
         if (rst) begin
@@ -86,7 +126,8 @@ module lsp(
         else begin
             if (ix_lsp_valid && ix_lsp_ready) begin
                 dm_req_addr <= agu_addr;
-                dm_req_wdata <= ix_lsp_source;
+                dm_req_wdata <= mem_wdata;
+                dm_req_wmask <= mem_wmask;
                 dm_req_wen <= !ix_lsp_wb_en;
                 ag_m_valid <= 1'b1;
                 ag_m_pc <= ix_lsp_pc;
@@ -112,7 +153,8 @@ module lsp(
     end
 
     // For hazard detection
-    assign lsp_ix_mem_wb_en = ag_m_wb_en && dm_req_valid;
+    assign lsp_ix_mem_busy = dm_req_valid || lsp_stalled;
+    assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
     assign lsp_ix_mem_dst = ag_m_dst;
 
     // Memory stage
@@ -125,8 +167,8 @@ module lsp(
     reg m_wb_mem_sign;
     reg [1:0] m_wb_mem_width;
     always @(posedge clk) begin
+        m_wb_req_valid <= dm_req_valid;
         if (!lsp_stalled) begin
-            m_wb_req_valid <= dm_req_valid;
             m_wb_pc <= ag_m_pc;
             m_wb_dst <= ag_m_dst;
             m_wb_wb_en <= ag_m_wb_en;
@@ -144,7 +186,6 @@ module lsp(
     wire [7:0] mem_rd_bl [0:7];
     wire [15:0] mem_rd_hl [0:3];
     wire [31:0] mem_rd_wl [0:1];
-    genvar i;
     generate
         for (i = 0; i < 8; i = i + 1) begin
             assign mem_rd_bl[i] = mem_rd[i*8+7:i*8];

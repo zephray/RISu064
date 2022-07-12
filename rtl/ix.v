@@ -47,6 +47,7 @@ module ix(
     input  wire [4:0]   dec_ix_rs1,
     input  wire [4:0]   dec_ix_rs2,
     input  wire [4:0]   dec_ix_rd,
+    input  wire         dec_ix_fencei,
     input  wire         dec_ix_valid,
     output wire         dec_ix_ready,
     // FU interfaces
@@ -83,6 +84,7 @@ module ix(
     output reg  [1:0]   ix_lsp_mem_width,
     output reg          ix_lsp_valid,
     input  wire         ix_lsp_ready,
+    input  wire         lsp_ix_mem_busy,
     input  wire         lsp_ix_mem_wb_en,
     input  wire [4:0]   lsp_ix_mem_dst,
     input  wire [4:0]   lsp_ix_dst,
@@ -102,6 +104,9 @@ module ix(
     assign ix_rs[1] = dec_ix_rs2;
     reg [0:0] rs_ready [0:1];
     reg [63:0] rs_val [0:63];
+    wire lsp_ag_active = ix_lsp_valid;
+    wire lsp_mem_active = lsp_ix_mem_busy;
+    wire lsp_wb_active = lsp_ix_valid && lsp_ix_wb_en;
     genvar i;
     generate
         for (i = 0; i < 2; i = i + 1) begin
@@ -110,7 +115,7 @@ module ix(
                 // Register read
                 rs_val[i] = (ix_rs[i] == 5'd0) ? (64'd0) : rf[ix_rs[i]];
                 // Forwarding point: IP execution
-                if (ix_ip_valid && ix_ip_ready && ix_ip_wb_en &&
+                if (ix_ip_valid && ix_ip_wb_en &&
                         (ix_ip_dst == ix_rs[i])) begin
                     rs_ready[i] = 1'b1;
                     rs_val[i] = ip_ix_forwarding;
@@ -121,7 +126,7 @@ module ix(
                     rs_val[i] = ip_ix_result;
                 end
                 // Stall point: LSP address generation
-                if (ix_lsp_valid && ix_lsp_ready && ix_lsp_wb_en &&
+                if (lsp_ag_active && ix_lsp_wb_en &&
                         (ix_lsp_dst == ix_rs[i])) begin
                     rs_ready[i] = 1'b0;
                 end
@@ -130,8 +135,7 @@ module ix(
                     rs_ready[i] = 1'b0;
                 end
                 // Forwarding point: LSP writeback
-                if (lsp_ix_valid && lsp_ix_wb_en &&
-                        (lsp_ix_dst == ix_rs[i])) begin
+                if (lsp_wb_active && (lsp_ix_dst == ix_rs[i])) begin
                     rs_ready[i] = 1'b1;
                     rs_val[i] = lsp_ix_result;
                 end
@@ -157,7 +161,12 @@ module ix(
     wire ix_issue_lsp = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
             (ix_lsp_ready) && !pipe_flush;
-    wire ix_issue = ix_issue_ip0 || ix_issue_lsp;
+    wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
+    wire ix_fencei_done = 1'b0;
+    wire ix_fence_done = (dec_ix_valid) && (dec_ix_legal) &&
+            (dec_ix_op_type == `OT_FENCE) && (ix_fenced_done) &&
+            (!dec_ix_fencei || ix_fencei_done);
+    wire ix_issue = ix_issue_ip0 || ix_issue_lsp || ix_fence_done;
 
     wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
     assign dec_ix_ready = !rst && !ix_stall;
@@ -239,7 +248,7 @@ module ix(
     end
 
     // Acknowledge accepted wb, always acknowledge retire without writeback
-    assign ip_ix_ready = !(ip_ix_valid && (!ip_wb_ac || ip_rwowb_req));
+    assign ip_ix_ready = !(ip_ix_valid && (!ip_wb_ac && !ip_rwowb_req));
     assign lsp_ix_ready = !(lsp_ix_valid && (!lsp_wb_ac && !lsp_rwowb_req));
 
 endmodule

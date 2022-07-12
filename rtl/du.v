@@ -35,6 +35,8 @@ module du(
     // Decoder output specific for LS pipe
     output reg mem_sign,
     output reg [1:0] mem_width,
+    // Decoder output specific for CSR pipe
+    output reg [1:0] csr_op,
     // Decoder common output
     output reg [2:0] op_type,
     output reg [1:0] operand1,
@@ -44,7 +46,9 @@ module du(
     output reg wb_en,
     output wire [4:0] rs1,
     output wire [4:0] rs2,
-    output wire [4:0] rd
+    output wire [4:0] rd,
+    // Other
+    output wire fencei
 );
 
     // Extract bit-fields
@@ -77,6 +81,7 @@ module du(
         operand2 = 2'bx;
         imm = 64'bx;
         wb_en = 1'bx;
+        fencei = 1'bx;
 
         /* verilator lint_off CASEINCOMPLETE */
         case (opcode)
@@ -122,6 +127,11 @@ module du(
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
+            if ((funct3 == 3'b001) && (funct7[6:1] != 6'd0))
+                legal = 1'b0;
+            if ((funct3 == 3'b101) &&
+                    ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0)))
+                legal = 1'b0;
         end
         `OP_INTREG: begin
             op_type = `OT_INT;
@@ -133,6 +143,11 @@ module du(
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
+            if ((funct3 != 3'b000) && (funct7 != 7'b0))
+                legal = 1'b0;
+            if ((funct3 == 3'b000) &&
+                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
+                legal = 1'b0;
         end
         `OP_INTIMMW: begin
             op_type = `OT_INT;
@@ -148,6 +163,11 @@ module du(
             truncate = 1'b1;
             wb_en = 1'b1;
             legal = 1'b1;
+            if ((funct3 == 3'b001) && (funct7 != 7'b0))
+                legal = 1'b0;
+            if ((funct3 == 3'b101) &&
+                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
+                legal = 1'b0;
         end
         `OP_INTREGW: begin
             op_type = `OT_INT;
@@ -159,6 +179,11 @@ module du(
             truncate = 1'b1;
             wb_en = 1'b1;
             legal = 1'b1;
+            if ((funct3 != 3'b000) && (funct7 != 7'b0))
+                legal = 1'b0;
+            if ((funct3 == 3'b000) &&
+                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
+                legal = 1'b0;
         end
         // Branching instructions, executed by integer pipe
         `OP_JAL: begin
@@ -196,6 +221,8 @@ module du(
             truncate = 1'b0;
             wb_en = 1'b0;
             legal = 1'b1;
+            if ((funct3 == 3'b010) || (funct3 == 3'b011))
+                legal = 1'b0;
         end
         // LS pipe instructions
         `OP_LOAD: begin
@@ -207,6 +234,8 @@ module du(
             imm = imm_i_type;
             wb_en = 1'b1;
             legal = 1'b1;
+            if (funct3 == 3'b111)
+                legal = 1'b0;
         end
         `OP_STORE: begin
             op_type = `OT_STORE;
@@ -217,8 +246,43 @@ module du(
             imm = imm_s_type;
             wb_en = 1'b0;
             legal = 1'b1;
+            if (funct3[2] == 1'b1)
+                legal = 1'b0;
+        end
+        `OP_FENCE: begin
+            op_type = `OT_FENCE;
+            if ((instr[31:28] == 4'd0) && (instr[19:7] == 13'd0)) begin
+                // fence
+                fencei = 1'b0;
+                legal = 1'b1;
+            end
+            else if (instr[31:7] == 25'b0000000000000000000100000) begin
+                fencei = 1'b1;
+                legal = 1'b1;
+            end
+            else begin
+                legal = 1'b0;
+            end
         end
         // CSR pipe instructions
+        /*`OP_ENVCSR: begin
+            op_type = `OT_CSR;
+            if (funct3 == 3'b000) begin
+                // environment instructions, raise illegal instruction for now
+                legal = 1'b0;
+            end
+            else begin
+                csr_op = funct3[1:0];
+                operand1 = (funct3[2] == 1'b1) ? `D_OPR1_ZIMM : `D_OPR1_RS1;
+                operand2 = `D_OPR2_IMM;
+                imm = imm_i_type;
+                wb_en = 1'b1;
+                legal = 1'b1;
+                if (csr_op == 2'd0) begin
+                    legal = 1'b0;
+                end
+            end
+        end*/
 
         endcase
 

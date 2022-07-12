@@ -116,8 +116,8 @@ module ifp(
     reg f2_dec_req_valid;
 
     always @(posedge clk) begin
+        f2_dec_req_valid <= im_req_valid;
         if (!ifp_stalled) begin
-            f2_dec_req_valid <= im_req_valid;
             f2_dec_pc <= f1_f2_pc;
             f2_dec_bp <= f1_f2_bp;
             f2_dec_bt <= f1_f2_bt;
@@ -137,7 +137,9 @@ module ifp(
         .rst(rst),
         .a_data({im_instr, f2_dec_pc, f2_dec_bp, f2_dec_bt, f2_dec_pc_override}),
         .a_valid(im_resp_valid),
+        /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
+        /* verilator lint_on PINCONNECTEMPTY */
         .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)

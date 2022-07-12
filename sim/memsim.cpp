@@ -62,12 +62,23 @@ void Memsim::reset() {
     req_valid = 0;
 }
 
-void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata, uint8_t we,
-        uint8_t valid, uint8_t &ready) {
+uint64_t Memsim::bytemask_to_bitmask(uint8_t mask) {
+    uint64_t result = 0;
+    for (int i = 0; i < 8; i++) {
+        if (mask & 0x01)
+            result |= 0xff << (i * 8);
+        mask >>= 1;
+    }
+    return result;
+}
+
+void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata,
+        uint8_t wmask, uint8_t we, uint8_t valid, uint8_t &ready) {
     if (valid) {
         req_valid = 1;
         req_addr = addr;
         req_wdata = wdata;
+        req_wmask = wmask;
         req_we = we;
         latency_counter = 0;
     }
@@ -86,8 +97,11 @@ void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata, uint8_t we,
 
             if (req_we) {
                 if (verbose)
-                    printf("Memory %08lx W %016lx\n", req_addr, req_wdata);
-                mem[raddr] = req_wdata;
+                    printf("Memory %08lx W %016lx M %02x\n", req_addr,
+                            req_wdata, req_wmask);
+                uint64_t bitmask = bytemask_to_bitmask(req_wmask);
+                mem[raddr] &= ~bitmask;
+                mem[raddr] |= req_wdata & bitmask;
             }
             else {
                 rdata = mem[raddr];

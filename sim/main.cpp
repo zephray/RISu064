@@ -44,8 +44,8 @@ uint64_t tickcount;
 
 // Settings
 bool enable_trace = false;
-bool unlimited = false;
-uint64_t max_cycles = 30;
+bool unlimited = true;
+uint64_t max_cycles;
 
 Memsim *ram;
 Memsim *rom;
@@ -66,6 +66,7 @@ void tick() {
         im_rdata,
         0,
         0,
+        0,
         core->im_valid,
         im_ready
     );
@@ -73,6 +74,7 @@ void tick() {
         core->dm_addr,
         dm_rdata,
         core->dm_wdata,
+        core->dm_wmask,
         core->dm_wen,
         core->dm_valid,
         dm_ready
@@ -120,7 +122,7 @@ int main(int argc, char *argv[]) {
     Verilated::traceEverOn(true);
 
     rom = new Memsim(ROM_BASE, ROM_SIZE, true, 0);
-    ram = new Memsim(RAM_BASE, RAM_SIZE, true, 0);
+    ram = new Memsim(RAM_BASE, RAM_SIZE, true, 1);
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--trace") == 0) {
@@ -133,6 +135,16 @@ int main(int argc, char *argv[]) {
             }
             else {
                 rom->load_file(argv[i + 1]);
+            }
+        }
+        else if (strcmp(argv[i], "--cycles") == 0) {
+            if (i == argc - 1) {
+                fprintf(stderr, "Error: no cycle limit number provided\n");
+                exit(1);
+            }
+            else {
+                unlimited = false;
+                max_cycles = atoi(argv[i + 1]);
             }
         }
     }
@@ -153,6 +165,12 @@ int main(int argc, char *argv[]) {
         tick();
         
         if ((!unlimited) && (tickcount > max_cycles)) {
+            break;
+        }
+
+        if (!core->rootp->risu__DOT__cpu__DOT__dec_ix_legal &&
+                core->rootp->risu__DOT__cpu__DOT__dec_ix_valid) {
+            printf("Encountered illegal instruction\n");
             break;
         }
     }

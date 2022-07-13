@@ -9,8 +9,8 @@ means.
 
 MEMORY
 {
-    FLASH (xr)  : ORIGIN = 0x10000000, LENGTH = 0x1000
-    RAM (xrw)   : ORIGIN = 0x80000000, LENGTH = 0x1000
+    FLASH (xr)  : ORIGIN = 0x80000000, LENGTH = 0x1000
+    RAM (xrw)   : ORIGIN = 0x80001000, LENGTH = 0x1000
 }
 
 

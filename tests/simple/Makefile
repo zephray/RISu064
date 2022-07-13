@@ -1,23 +1,28 @@
 CROSS_COMPILE ?= riscv64-unknown-elf-
 CC := $(CROSS_COMPILE)gcc
 OBJCOPY := $(CROSS_COMPILE)objcopy
+OBJDUMP := $(CROSS_COMPILE)objdump
 RVEMU:= spike
 RISUSIM:= ../sim/sim
 CFLAGS:= -march=rv64i -mabi=lp64 -ffreestanding -nostdlib
 SRCS = $(wildcard *.S)
 ELF = $(SRCS:.S=.elf)
 BIN = $(SRCS:.S=.bin)
+DUMP = $(SRCS:.S=.dump)
 EXPECTS = $(SRCS:.S=.expected)
 ACTUALS = $(SRCS:.S=.actual)
 
 .PHONY: all
-all: elf bin expected actual result
+all: elf bin dump
 
 .PHONY: elf
 elf: $(ELF)
 
 .PHONY: bin
 bin: $(BIN)
+
+.PHONY: dump
+dump: $(DUMP)
 
 .PHONY: expected
 expected: $(EXPECTS)
@@ -33,6 +38,9 @@ actual: $(ACTUALS)
 
 %.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
+
+%.dump: %.elf
+	$(OBJDUMP) -D $< > $@
 
 %.elf: %.o
 	$(CC) $(CFLAGS) -Wl,-Bstatic,-T,sections.lds,--strip-debug -o $@ $< -lgcc

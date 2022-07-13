@@ -45,7 +45,7 @@ module ifp(
     input  wire         ip_if_pc_override,
     input  wire [63:0]  ip_if_new_pc
 );
-    localparam RESET_VECTOR = 64'h0000000010000000;
+    localparam RESET_VECTOR = 64'h0000000080000000;
 
     // F1: PC generation
     wire [63:0] next_pc;
@@ -58,8 +58,9 @@ module ifp(
     wire bp_result = `BP_NOT_TAKEN;
     wire [63:0] btb_result = 64'bx;
 
-    wire ifp_stalled = ((f2_dec_req_valid && !im_resp_valid) || (!if_dec_ready))
-            && !rst;
+    wire ifp_stalled_memory = (f2_dec_req_valid && !im_resp_valid) && !rst;
+    wire ifp_stalled_back_pressure = (!if_dec_ready) && !rst;
+    wire ifp_stalled = ifp_stalled_memory || ifp_stalled_back_pressure;
     reg ifp_stalled_last;
     wire [63:0] if_new_pc;
     wire if_pc_override;
@@ -74,7 +75,7 @@ module ifp(
         /* verilator lint_on PINCONNECTEMPTY */
         .b_data(if_new_pc),
         .b_valid(if_pc_override),
-        .b_ready(!ifp_stalled)
+        .b_ready(!(ifp_stalled || ifp_stalled_last))
     );
 
     assign next_pc =
@@ -116,7 +117,9 @@ module ifp(
     reg f2_dec_req_valid;
 
     always @(posedge clk) begin
-        f2_dec_req_valid <= im_req_valid;
+        if (!ifp_stalled_memory) begin
+            f2_dec_req_valid <= im_req_valid;
+        end
         if (!ifp_stalled) begin
             f2_dec_pc <= f1_f2_pc;
             f2_dec_bp <= f1_f2_bp;

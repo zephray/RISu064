@@ -14,6 +14,7 @@ VOBJ := obj_dir
 CXX   := g++
 FBDIR := ../rtl
 CPUS ?= $(shell bash -c 'nproc --all')
+VERBOSE ?= 0
 
 .PHONY: all
 risu: $(VOBJ)/Vrisu__ALL.a
@@ -25,6 +26,9 @@ else
 VERILATOR := $(VERILATOR_ROOT)/bin/verilator
 endif
 VFLAGS := -Wall -Wno-fatal -MMD --trace -cc -I../rtl -I../rtl/third_party/fifo
+ifeq ($(VERBOSE), 1)
+VFLAGS += +define+VERBOSE=1
+endif
 
 $(VOBJ)/Vrisu__ALL.a: $(VOBJ)/Vrisu.cpp $(VOBJ)/Vrisu.h
 $(VOBJ)/Vrisu__ALL.a: $(VOBJ)/Vrisu.mk

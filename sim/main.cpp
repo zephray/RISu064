@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
+#include <time.h>
 
 #include "verilated.h"
 #include "verilated_vcd_c.h"
@@ -30,12 +31,12 @@
 #include "Vrisu___024root.h"
 
 #include "memsim.h"
+#include "earliercon.h"
 
 #define RAM_BASE 0x80000000
-#define RAM_SIZE 4096
+#define RAM_SIZE 64*1024
 
-#define ROM_BASE 0x10000000
-#define ROM_SIZE 4096
+#define CON_BASE 0x20000000
 
 // Verilator related
 Vrisu *core;
@@ -45,10 +46,12 @@ uint64_t tickcount;
 // Settings
 bool enable_trace = false;
 bool unlimited = true;
+bool verbose = false;
 uint64_t max_cycles;
 
-Memsim *ram;
-Memsim *rom;
+Memsim *ram_iport;
+Memsim *ram_dport;
+Earliercon *earliercon;
 
 void tick() {
     // Software simulated parts should read the signal
@@ -57,11 +60,13 @@ void tick() {
     // clock edge (DFF)
 
     // Note: accessing not mapped address causes deadlock
-    uint64_t im_rdata;
-    uint8_t im_ready;
-    uint64_t dm_rdata;
-    uint8_t dm_ready;
-    rom->apply(
+    uint64_t im_rdata = core->im_rdata;
+    uint8_t im_ready = core->im_ready;
+    uint64_t dm_rdata = core->dm_rdata;
+    uint8_t dm_ready = core->dm_ready;
+
+    im_ready = 0;
+    ram_iport->apply(
         core->im_addr,
         im_rdata,
         0,
@@ -70,7 +75,18 @@ void tick() {
         core->im_valid,
         im_ready
     );
-    ram->apply(
+
+    dm_ready = 0;
+    ram_dport->apply(
+        core->dm_addr,
+        dm_rdata,
+        core->dm_wdata,
+        core->dm_wmask,
+        core->dm_wen,
+        core->dm_valid,
+        dm_ready
+    );
+    earliercon->apply(
         core->dm_addr,
         dm_rdata,
         core->dm_wdata,
@@ -88,7 +104,7 @@ void tick() {
     core->dm_rdata = dm_rdata;
     core->dm_ready = dm_ready;
 
-    // Let combinational changes propergate
+    // Let combinational changes propagate
     core->eval();
 
     if (enable_trace)
@@ -110,8 +126,8 @@ void reset() {
     tick();
     tick();
     core->rst = 0;
-    ram->reset();
-    rom->reset();
+    ram_dport->reset();
+    ram_iport->reset();
 }
 
 int main(int argc, char *argv[]) {
@@ -121,20 +137,33 @@ int main(int argc, char *argv[]) {
     core = new Vrisu;
     Verilated::traceEverOn(true);
 
-    rom = new Memsim(ROM_BASE, ROM_SIZE, true, 0);
-    ram = new Memsim(RAM_BASE, RAM_SIZE, true, 1);
+    ram_dport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
+    ram_iport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
+    earliercon = new Earliercon(CON_BASE);
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--trace") == 0) {
+        if (strcmp(argv[i], "--help") == 0) {
+            printf("RISu64 Simulator\n");
+            printf("Available parameters:\n"); 
+            printf("    --trace: Enable waveform trace\n"); 
+            printf("    --ram <filename>: Preload RAM image file\n");
+            printf("    --cycles <maxcycles>: Set simulation cycle limit\n");
+            printf("    --ilat <cycles>: Instruction memory latency\n");
+            printf("    --dlat <cycles>: Data memory latency\n");
+            printf("    --verbose: Enable verbose output\n");
+            exit(0);
+        }
+        else if (strcmp(argv[i], "--trace") == 0) {
             enable_trace = true;
         }
-        else if (strcmp(argv[i], "--rom") == 0) {
+        else if (strcmp(argv[i], "--ram") == 0) {
             if (i == argc - 1) {
-                fprintf(stderr, "Error: no ROM filename provided\n");
+                fprintf(stderr, "Error: no RAM filename provided\n");
                 exit(1);
             }
             else {
-                rom->load_file(argv[i + 1]);
+                ram_dport->load_file(argv[i + 1]);
+                ram_iport->copy(ram_dport);
             }
         }
         else if (strcmp(argv[i], "--cycles") == 0) {
@@ -147,6 +176,29 @@ int main(int argc, char *argv[]) {
                 max_cycles = atoi(argv[i + 1]);
             }
         }
+        else if (strcmp(argv[i], "--ilat") == 0) {
+            if (i == argc - 1) {
+                fprintf(stderr, "Error: no cycle number provided\n");
+                exit(1);
+            }
+            else {
+                ram_iport->set_latency(atoi(argv[i + 1]));
+            }
+        }
+        else if (strcmp(argv[i], "--dlat") == 0) {
+            if (i == argc - 1) {
+                fprintf(stderr, "Error: no cycle number provided\n");
+                exit(1);
+            }
+            else {
+                ram_dport->set_latency(atoi(argv[i + 1]));
+            }
+        }
+        else if (strcmp(argv[i], "--verbose") == 0) {
+            ram_dport->set_verbose(true);
+            ram_iport->set_verbose(true);
+            verbose = true;
+        }
     }
 
     if (enable_trace) {
@@ -156,7 +208,10 @@ int main(int argc, char *argv[]) {
     }
 
     // Start simulation
-    printf("Simulation start.\n");
+    if (verbose)
+        printf("Simulation start.\n");
+
+    clock_t time = clock();
 
     reset();
 
@@ -170,19 +225,42 @@ int main(int argc, char *argv[]) {
 
         if (!core->rootp->risu__DOT__cpu__DOT__dec_ix_legal &&
                 core->rootp->risu__DOT__cpu__DOT__dec_ix_valid) {
-            printf("Encountered illegal instruction\n");
+            if (verbose)
+                printf("Encountered illegal instruction\n");
             break;
         }
     }
 
-    printf("Stop.\n");
-    for (int i = 0; i < 31; i++) {
-        printf("R%d = %016lx\n", i + 1, core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[i]);
+    time = clock() - time;
+    time /= (CLOCKS_PER_SEC / 1000);
+
+    if (verbose) {
+        printf("Simulation stopped after %ld cycles,\n"
+                "average simulation speed: %ld kHz.\n",
+                tickcount, tickcount / time);
+        for (int i = 0; i < 31; i++) {
+            printf("R%d = %016lx\n", i + 1, core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[i]);
+        }
+    }
+
+    int retval;
+    if ((core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[9] == 0) &&
+            (core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[16] == 93)) {
+        printf("Test passed\n");
+        retval = 0;
+    }
+    else {
+        printf("Test failed\n");
+        retval = 1;
     }
 
     if (enable_trace) {
         trace->close();
     }
 
-    return 0;
+    delete ram_iport;
+    delete ram_dport;
+    delete earliercon;
+
+    return retval;
 }

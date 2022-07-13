@@ -100,45 +100,79 @@ module ix(
     assign rf_rsrc[0] = dec_ix_rs1;
     assign rf_rsrc[1] = dec_ix_rs2;
     reg [0:0] rs_ready [0:1];
-    reg [63:0] rs_val [0:63];
+    reg [63:0] rs_val [0:1];
+    wire ip_ex_ixstalled = ix_ip_valid && !ix_ip_ready && ix_ip_wb_en;
+    wire ip_ex_active = ix_ip_valid && ix_ip_ready && ix_ip_wb_en;
+    wire ip_wb_active = ip_wb_valid && ip_wb_wb_en;
     wire lsp_ag_active = ix_lsp_valid;
     wire lsp_mem_active = lsp_ix_mem_busy;
     wire lsp_wb_active = lsp_wb_valid && lsp_wb_wb_en;
+    reg dbg_stl_ipe [0:1];
+    reg dbg_fwd_ipe [0:1];
+    reg dbg_fwd_ipw [0:1];
+    reg dbg_stl_lag [0:1];
+    reg dbg_stl_lma [0:1];
+    reg dbg_fwd_lwb [0:1];
     genvar i;
     generate
         for (i = 0; i < 2; i = i + 1) begin
             always @(*) begin
+                dbg_stl_ipe[i] = 1'b0;
+                dbg_fwd_ipe[i] = 1'b0;
+                dbg_fwd_ipw[i] = 1'b0;
+                dbg_stl_lag[i] = 1'b0;
+                dbg_stl_lma[i] = 1'b0;
+                dbg_fwd_lwb[i] = 1'b0;
+
                 rs_ready[i] = 1'b1;
                 // Register read
                 rs_val[i] = (rf_rsrc[i] == 5'd0) ? (64'd0) : rf_rdata[i];
-                // Forwarding point: IP execution
-                if (ix_ip_valid && ix_ip_wb_en &&
-                        (ix_ip_dst == rf_rsrc[i])) begin
-                    rs_ready[i] = 1'b1;
-                    rs_val[i] = ip_ix_forwarding;
-                end
+
                 // Forwarding point: IP writeback
-                if (ip_wb_valid && ip_wb_wb_en && (ip_wb_dst == rf_rsrc[i])) begin
+                if (ip_wb_active && (ip_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
                     rs_val[i] = ip_wb_result;
+                    dbg_fwd_ipw[i] = 1'b1;
+                end
+                // Forwarding point: IP execution
+                if (ip_ex_active && (ix_ip_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = ip_ix_forwarding;
+                    dbg_fwd_ipe[i] = 1'b1;
+                end
+                // Stall point: IP execution not accepted
+                if (ip_ex_ixstalled && (ix_ip_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b0;
+                    dbg_stl_ipe[i] = 1'b1;
+                end
+
+                // Forwarding point: LSP writeback
+                if (lsp_wb_active && (lsp_wb_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = lsp_wb_result;
+                    dbg_fwd_lwb[i] = 1'b1;
+                end
+                // Stall point: LSP memory access active
+                if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b0;
+                    dbg_stl_lma[i] = 1'b1;
                 end
                 // Stall point: LSP address generation
                 if (lsp_ag_active && ix_lsp_wb_en &&
                         (ix_lsp_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b0;
+                    dbg_stl_lag[i] = 1'b1;
                 end
-                // Stall point: LSP memory access active
-                if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == rf_rsrc[i])) begin
-                    rs_ready[i] = 1'b0;
-                end
-                // Forwarding point: LSP writeback
-                if (lsp_wb_active && (lsp_wb_dst == rf_rsrc[i])) begin
+
+                // Always override to 0 in case write to 0 forwarding is valid
+                if (rf_rsrc[i] == 5'd0) begin
                     rs_ready[i] = 1'b1;
-                    rs_val[i] = lsp_wb_result;
+                    rs_val[i] = 64'd0;
                 end
             end
         end
     endgenerate
+
 
     wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
     wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
@@ -158,12 +192,23 @@ module ix(
     wire ix_issue_lsp = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
             (ix_lsp_ready) && !pipe_flush;
+    wire ix_issue_csr = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
+            (dec_ix_op_type == `OT_CSR) && ix_barrier_done && !pipe_flush;
+    // Wait for LS pipe to finish
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
     wire ix_fencei_done = 1'b0;
     wire ix_fence_done = (dec_ix_valid) && (dec_ix_legal) &&
             (dec_ix_op_type == `OT_FENCE) && (ix_fenced_done) &&
             (!dec_ix_fencei || ix_fencei_done);
-    wire ix_issue = ix_issue_ip0 || ix_issue_lsp || ix_fence_done;
+    // Wait for integer pipe to finish
+    wire ix_ibarrier_done = !(ip_ex_ixstalled || ip_ex_active || ip_wb_active);
+    // Barrier for waiting for in-flight instructions to complete
+    wire ix_barrier_done = ix_fenced_done && ix_ibarrier_done;
+    wire ix_issue =
+            // Instructions to pipes
+            ix_issue_ip0 || ix_issue_lsp || ix_issue_csr ||
+            // Fake instruction for fence/ barrier
+            ix_fence_done;
 
     wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
     assign dec_ix_ready = !rst && !ix_stall;

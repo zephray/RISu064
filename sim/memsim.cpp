@@ -55,6 +55,18 @@ void Memsim::load_file(char *fn) {
     fclose(fp);
 }
 
+void Memsim::copy(Memsim *source) {
+    memcpy(mem, source->mem, source->size);
+}
+
+void Memsim::set_verbose(bool verbose) {
+    this->verbose = verbose;
+}
+
+void Memsim::set_latency(int latency) {
+    this->latency = latency;
+}
+
 void Memsim::reset() {
     if (verbose) {
         fprintf(stderr, "Memory simulator reset\n");
@@ -115,8 +127,5 @@ void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata,
         else {
             latency_counter++;
         }
-    }
-    else {
-        ready = 0;
     }
 }

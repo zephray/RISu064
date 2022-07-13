@@ -89,9 +89,11 @@ module ip(
                 (ix_ip_operand2) : (64'd4);
         
         wire [63:0] br_offset_sext = {{43{ix_ip_boffset[20]}}, ix_ip_boffset};
+        wire [63:0] br_jalr_target =
+                {{(ix_ip_operand1 + br_offset_sext)}[63:1], 1'b0};
         wire [63:0] br_target =
                 (ix_ip_br_type == `BT_NONE) ? (64'bx) :
-                (ix_ip_br_type == `BT_JALR) ? (ix_ip_pc + ix_ip_operand1) :
+                (ix_ip_br_type == `BT_JALR) ? (br_jalr_target) :
                 (ix_ip_pc + br_offset_sext);
         wire alu_result_zero = alu_result == 64'b0;
         wire br_take =
@@ -122,7 +124,11 @@ module ip(
         .result(alu_result)
     );
 
-    assign ip_ix_forwarding = alu_result;
+    wire [63:0] wb_result = (ix_ip_truncate) ?
+                {{32{alu_result[31]}}, alu_result[31:0]} : // 32-bit operation
+                alu_result; // 64-bit operation
+
+    assign ip_ix_forwarding = wb_result;
 
     assign ix_ip_ready = ip_wb_ready;
 
@@ -143,9 +149,7 @@ module ip(
     always @(posedge clk) begin
         if (ix_ip_ready) begin
             ip_wb_dst <= ix_ip_dst;
-            ip_wb_result <= (ix_ip_truncate) ?
-                {{32{alu_result[31]}}, alu_result[31:0]} :
-                alu_result;
+            ip_wb_result <= wb_result;
             ip_wb_pc <= ix_ip_pc;
             ip_wb_wb_en <= ix_ip_wb_en;
         end

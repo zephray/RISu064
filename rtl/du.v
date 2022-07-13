@@ -143,11 +143,15 @@ module du(
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
-            if ((funct3 != 3'b000) && (funct7 != 7'b0))
-                legal = 1'b0;
-            if ((funct3 == 3'b000) &&
-                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
-                legal = 1'b0;
+            if ((funct3 != 3'b000) && (funct3 != 3'b101)) begin
+                if (funct7 != 7'b0)
+                    legal = 1'b0;
+            end
+            else begin
+                if ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0))
+                    legal = 1'b0;
+            end
+
         end
         `OP_INTIMMW: begin
             op_type = `OT_INT;
@@ -163,11 +167,17 @@ module du(
             truncate = 1'b1;
             wb_en = 1'b1;
             legal = 1'b1;
-            if ((funct3 == 3'b001) && (funct7 != 7'b0))
+            if (funct3 == 3'b001) begin
+                if (funct7 != 7'b0)
+                    legal = 1'b0;
+            end
+            else if (funct3 == 3'b101) begin
+                if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
+                    legal = 1'b0;
+            end
+            else if (funct3 != 3'b000) begin
                 legal = 1'b0;
-            if ((funct3 == 3'b101) &&
-                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
-                legal = 1'b0;
+            end
         end
         `OP_INTREGW: begin
             op_type = `OT_INT;
@@ -179,11 +189,18 @@ module du(
             truncate = 1'b1;
             wb_en = 1'b1;
             legal = 1'b1;
-            if ((funct3 != 3'b000) && (funct7 != 7'b0))
+            if ((funct3 == 3'b000) || (funct3 == 3'b101)) begin
+                if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
+                    legal = 1'b0;
+            end
+            else if (funct3 == 3'b001) begin
+                if (funct7 != 7'b0)
+                    legal = 1'b0;
+            end
+            else begin
+                // 32-bit multiplications
                 legal = 1'b0;
-            if ((funct3 == 3'b000) &&
-                    ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0)))
-                legal = 1'b0;
+            end
         end
         // Branching instructions, executed by integer pipe
         `OP_JAL: begin
@@ -283,6 +300,16 @@ module du(
                 end
             end
         end*/
+        `OP_ENVCSR: begin
+            op_type = `OT_CSR;
+            // Decode as nop for now
+            operand1 = `D_OPR1_ZERO;
+            operand2 = `D_OPR2_IMM;
+            option = (instr == 32'h00000073);
+            imm = 64'bx;
+            wb_en = 1'b0;
+            legal = 1'b1;
+        end
 
         endcase
 

@@ -64,6 +64,8 @@ module wb(
     wire [63:0] wb_value =
             (ip_wb_ac) ? ip_wb_result :
             (lsp_wb_ac) ? lsp_wb_result : 64'bx;
+
+    `ifdef VERBOSE
     wire [63:0] wb_pc =
             (ip_wb_ac) ? ip_wb_pc :
             (lsp_wb_ac) ? lsp_wb_pc : 64'bx;
@@ -80,6 +82,7 @@ module wb(
             end
         end
     end
+    `endif
 
     assign rf_wen[0] = wb_active;
     assign rf_wdst[0] = wb_dst;

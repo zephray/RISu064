@@ -26,30 +26,24 @@
 module rf(
     input  wire         clk,
     input  wire         rst,
-    input  wire [4:0]   rf_rsrc [0:RD_PORTS-1],
-    output wire [63:0]  rf_rdata [0:RD_PORTS-1],
-    input  wire         rf_wen [0:WR_PORTS-1],
-    input  wire [4:0]   rf_wdst [0:WR_PORTS-1],
-    input  wire [63:0]  rf_wdata [0:WR_PORTS-1]
+    input  wire [4:0]   rf_rsrc0,
+    output wire [63:0]  rf_rdata0,
+    input  wire [4:0]   rf_rsrc1,
+    output wire [63:0]  rf_rdata1,
+    input  wire         rf_wen,
+    input  wire [4:0]   rf_wdst,
+    input  wire [63:0]  rf_wdata
 );
-    parameter RD_PORTS = 2;
-    parameter WR_PORTS = 1;
 
     reg [63:0] rf_array [31:1];
 
-    genvar i;
-    generate
-    for (i = 0; i < WR_PORTS; i = i + 1) begin
-        always @(posedge clk) begin
-            if (rf_wen[i]) begin
-                rf_array[rf_wdst[i]] <= rf_wdata[i];
-            end
+    always @(posedge clk) begin
+        if (rf_wen) begin
+            rf_array[rf_wdst] <= rf_wdata;
         end
     end
 
-    for (i = 0; i < RD_PORTS; i = i + 1) begin
-        assign rf_rdata[i] = rf_array[rf_rsrc[i]];
-    end
-    endgenerate
+    assign rf_rdata0 = rf_array[rf_rsrc0];
+    assign rf_rdata1 = rf_array[rf_rsrc1];
 
 endmodule

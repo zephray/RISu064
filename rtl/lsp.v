@@ -34,7 +34,7 @@ module lsp(
     output reg  [63:0]  dm_req_wdata,
     output reg  [7:0]   dm_req_wmask,
     output reg          dm_req_wen,
-    output reg          dm_req_valid,
+    output wire         dm_req_valid,
     input  wire [63:0]  dm_resp_rdata,
     input  wire         dm_resp_valid,
     // From issue
@@ -53,10 +53,10 @@ module lsp(
     output wire         lsp_ix_mem_wb_en,
     output wire [4:0]   lsp_ix_mem_dst,
     // To writeback
-    output reg  [4:0]   lsp_wb_dst,
+    output wire [4:0]   lsp_wb_dst,
     output wire [63:0]  lsp_wb_result,
-    output reg  [63:0]  lsp_wb_pc,
-    output reg          lsp_wb_wb_en,
+    output wire [63:0]  lsp_wb_pc,
+    output wire         lsp_wb_wb_en,
     output wire         lsp_wb_valid,
     input  wire         lsp_wb_ready,
     // Exception

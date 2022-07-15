@@ -46,17 +46,21 @@ module cpu(
     wire        lsp_unaligned_store;
 
     // Register file
-    wire [4:0]  rf_rsrc [0:2-1];
-    wire [63:0] rf_rdata [0:2-1];
-    wire        rf_wen [0:1-1];
-    wire [4:0]  rf_wdst [0:1-1];
-    wire [63:0] rf_wdata [0:1-1];
+    wire [4:0]  rf_rsrc0;
+    wire [63:0] rf_rdata0;
+    wire [4:0]  rf_rsrc1;
+    wire [63:0] rf_rdata1;
+    wire        rf_wen;
+    wire [4:0]  rf_wdst;
+    wire [63:0] rf_wdata;
 
     rf rf(
         .clk(clk),
         .rst(rst),
-        .rf_rsrc(rf_rsrc),
-        .rf_rdata(rf_rdata),
+        .rf_rsrc0(rf_rsrc0),
+        .rf_rdata0(rf_rdata0),
+        .rf_rsrc1(rf_rsrc1),
+        .rf_rdata1(rf_rdata1),
         .rf_wen(rf_wen),
         .rf_wdst(rf_wdst),
         .rf_wdata(rf_wdata)
@@ -196,8 +200,10 @@ module cpu(
         .rst(rst),
         .pipe_flush(pipe_flush),
         // Register file interface
-        .rf_rsrc(rf_rsrc),
-        .rf_rdata(rf_rdata),
+        .rf_rsrc0(rf_rsrc0),
+        .rf_rsrc1(rf_rsrc1),
+        .rf_rdata0(rf_rdata0),
+        .rf_rdata1(rf_rdata1),
         // IX interface
         .dec_ix_pc(dec_ix_pc),
         .dec_ix_bp(dec_ix_bp),

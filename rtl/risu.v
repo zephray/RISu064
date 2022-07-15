@@ -27,11 +27,11 @@
 module risu(
     input wire clk,
     input wire rst,
-    output wire [63:0] im_addr,
+    output wire [31:0] im_addr,
     input wire [63:0] im_rdata,
     output wire im_valid,
     input wire im_ready,
-    output wire [63:0] dm_addr,
+    output wire [31:0] dm_addr,
     input wire [63:0] dm_rdata,
     output wire [63:0] dm_wdata,
     output wire [7:0] dm_wmask,

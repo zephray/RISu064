@@ -35,10 +35,10 @@ module ifp(
     input  wire [63:0]  im_resp_rdata,
     input  wire         im_resp_valid,
     // Decoder interface
-    output reg  [63:0]  if_dec_pc,
+    output wire [63:0]  if_dec_pc,
     output wire [31:0]  if_dec_instr,
-    output reg          if_dec_bp,
-    output reg  [63:0]  if_dec_bt,
+    output wire         if_dec_bp,
+    output wire [63:0]  if_dec_bt,
     output wire         if_dec_valid,
     input  wire         if_dec_ready,
     // Next PC

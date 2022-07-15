@@ -48,7 +48,7 @@ module du(
     output wire [4:0] rs2,
     output wire [4:0] rd,
     // Other
-    output wire fencei
+    output reg fencei
 );
 
     // Extract bit-fields

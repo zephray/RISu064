@@ -89,8 +89,8 @@ module ip(
                 (ix_ip_operand2) : (64'd4);
         
         wire [63:0] br_offset_sext = {{43{ix_ip_boffset[20]}}, ix_ip_boffset};
-        wire [63:0] br_jalr_target =
-                {{(ix_ip_operand1 + br_offset_sext)}[63:1], 1'b0};
+        wire [63:0] br_jalr_target_add = ix_ip_operand1 + br_offset_sext;
+        wire [63:0] br_jalr_target = {br_jalr_target_add[63:1], 1'b0};
         wire [63:0] br_target =
                 (ix_ip_br_type == `BT_NONE) ? (64'bx) :
                 (ix_ip_br_type == `BT_JALR) ? (br_jalr_target) :

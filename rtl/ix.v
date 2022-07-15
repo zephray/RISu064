@@ -29,8 +29,10 @@ module ix(
     input  wire         rst,
     input  wire         pipe_flush,
     // Register file interface
-    output wire [4:0]   rf_rsrc [0:2-1],
-    input  wire [63:0]  rf_rdata [0:2-1],
+    output wire [4:0]   rf_rsrc0,
+    input  wire [63:0]  rf_rdata0,
+    output wire [4:0]   rf_rsrc1,
+    input  wire [63:0]  rf_rdata1,
     // IX interface
     input  wire [63:0]  dec_ix_pc,
     input  wire         dec_ix_bp,
@@ -97,8 +99,14 @@ module ix(
 );
 
     // Hazard detection
-    assign rf_rsrc[0] = dec_ix_rs1;
-    assign rf_rsrc[1] = dec_ix_rs2;
+    assign rf_rsrc0 = dec_ix_rs1;
+    assign rf_rsrc1 = dec_ix_rs2;
+    wire [5:0] rf_rsrc [0:1];
+    assign rf_rsrc[0] = rf_rsrc0;
+    assign rf_rsrc[1] = rf_rsrc1;
+    wire [63:0] rf_rdata [0:1];
+    assign rf_rdata[0] = rf_rdata0;
+    assign rf_rdata[1] = rf_rdata1;
     reg [0:0] rs_ready [0:1];
     reg [63:0] rs_val [0:1];
     wire ip_ex_ixstalled = ix_ip_valid && !ix_ip_ready && ix_ip_wb_en;

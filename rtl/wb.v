@@ -28,9 +28,9 @@ module wb(
     input  wire         clk,
     input  wire         rst,
     // To register file
-    output wire         rf_wen [0:0],
-    output wire [4:0]   rf_wdst [0:0],
-    output wire [63:0]  rf_wdata [0:0],
+    output wire         rf_wen,
+    output wire [4:0]   rf_wdst,
+    output wire [63:0]  rf_wdata,
     // From integer pipe
     input  wire [4:0]   ip_wb_dst,
     input  wire [63:0]  ip_wb_result,
@@ -84,9 +84,9 @@ module wb(
     end
     `endif
 
-    assign rf_wen[0] = wb_active;
-    assign rf_wdst[0] = wb_dst;
-    assign rf_wdata[0] = wb_value;
+    assign rf_wen = wb_active;
+    assign rf_wdst = wb_dst;
+    assign rf_wdata = wb_value;
 
     // Acknowledge accepted wb, always acknowledge retire without writeback
     assign ip_wb_ready = !(ip_wb_valid && (!ip_wb_ac && !ip_rwowb_req));

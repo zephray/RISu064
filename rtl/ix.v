@@ -37,10 +37,13 @@ module ix(
     input  wire [63:0]  dec_ix_pc,
     input  wire         dec_ix_bp,
     input  wire [63:0]  dec_ix_bt,
-    input  wire [2:0]   dec_ix_op,
+    input  wire [3:0]   dec_ix_op,
     input  wire         dec_ix_option,
     input  wire         dec_ix_truncate,
     input  wire [1:0]   dec_ix_br_type,
+    input  wire         dec_ix_br_neg,
+    input  wire         dec_ix_br_base_src,
+    input  wire         dec_ix_br_inj_pc,
     input  wire         dec_ix_mem_sign,
     input  wire [1:0]   dec_ix_mem_width,
     input  wire [1:0]   dec_ix_operand1,
@@ -60,11 +63,13 @@ module ix(
     output reg  [63:0]  ix_ip_pc,
     output reg  [4:0]   ix_ip_dst,
     output reg          ix_ip_wb_en,
-    output reg  [2:0]   ix_ip_op,
+    output reg  [3:0]   ix_ip_op,
     output reg          ix_ip_option,
     output reg          ix_ip_truncate,
     output reg  [1:0]   ix_ip_br_type,
-    output reg  [20:0]  ix_ip_boffset,
+    output reg          ix_ip_br_neg,
+    output reg  [63:0]  ix_ip_br_base,
+    output reg  [20:0]  ix_ip_br_offset,
     output reg  [63:0]  ix_ip_operand1,
     output reg  [63:0]  ix_ip_operand2,
     output reg          ix_ip_bp,
@@ -101,7 +106,7 @@ module ix(
     // Hazard detection
     assign rf_rsrc0 = dec_ix_rs1;
     assign rf_rsrc1 = dec_ix_rs2;
-    wire [5:0] rf_rsrc [0:1];
+    wire [4:0] rf_rsrc [0:1];
     assign rf_rsrc[0] = rf_rsrc0;
     assign rf_rsrc[1] = rf_rsrc1;
     wire [63:0] rf_rdata [0:1];
@@ -185,13 +190,16 @@ module ix(
     wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
     wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
 
-    wire [63:0] operand1_value =
+    wire [63:0] operand1_value = ((dec_ix_operand1 == `D_OPR1_PC) ||
+            (dec_ix_br_inj_pc)) ? (dec_ix_pc) :
             (dec_ix_operand1 == `D_OPR1_RS1) ? (rs_val[0]) :
-            (dec_ix_operand1 == `D_OPR1_PC) ? (dec_ix_pc) :
             (dec_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) : (64'bx);
     wire [63:0] operand2_value =
             (dec_ix_operand2 == `D_OPR2_RS2) ? (rs_val[1]) :
-            (dec_ix_operand2 == `D_OPR2_IMM) ? (dec_ix_imm) : (64'bx);
+            (dec_ix_operand2 == `D_OPR2_IMM) ? (dec_ix_imm) :
+            (dec_ix_operand2 == `D_OPR2_4) ? (64'd4) : (64'bx);
+    wire [63:0] br_base = (dec_ix_br_base_src == `BB_PC) ? (dec_ix_pc) :
+            (rs_val[0]);
 
     wire ix_opr_ready = operand1_ready && operand2_ready;
     wire ix_issue_ip0 = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
@@ -232,7 +240,9 @@ module ix(
                 ix_ip_option <= dec_ix_option;
                 ix_ip_truncate <= dec_ix_truncate;
                 ix_ip_br_type <= dec_ix_br_type;
-                ix_ip_boffset <= dec_ix_imm[20:0];
+                ix_ip_br_neg <= dec_ix_br_neg;
+                ix_ip_br_offset <= dec_ix_imm[20:0];
+                ix_ip_br_base <= br_base;
                 ix_ip_operand1 <= operand1_value;
                 ix_ip_operand2 <= operand2_value;
                 ix_ip_bp <= dec_ix_bp;

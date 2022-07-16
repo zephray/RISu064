@@ -33,11 +33,13 @@ module ip(
     input  wire [63:0]  ix_ip_pc,
     input  wire [4:0]   ix_ip_dst,
     input  wire         ix_ip_wb_en,
-    input  wire [2:0]   ix_ip_op,
+    input  wire [3:0]   ix_ip_op,
     input  wire         ix_ip_option,
     input  wire         ix_ip_truncate,
     input  wire [1:0]   ix_ip_br_type,
-    input  wire [20:0]  ix_ip_boffset,
+    input  wire         ix_ip_br_neg,
+    input  wire [63:0]  ix_ip_br_base,
+    input  wire [20:0]  ix_ip_br_offset,
     input  wire [63:0]  ix_ip_operand1,
     input  wire [63:0]  ix_ip_operand2,
     input  wire         ix_ip_bp,
@@ -54,73 +56,45 @@ module ip(
     output reg          ip_wb_valid,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
-    output wire         ip_if_pc_override,
-    output wire [63:0]  ip_if_new_pc
+    output reg          ip_if_pc_override,
+    output reg  [63:0]  ip_if_new_pc
 );
     parameter IP_HANDLE_BRANCH = 1;
 
     wire [63:0] alu_result;
-    wire [2:0] alu_op;
-    wire alu_option;
-    wire [63:0] alu_operand1;
-    wire [63:0] alu_operand2;
 
     // BT_NONE : PCAdder - do nothing, ALU - normal op
-    // BT_JAL  : PCAdder - PC + imm  , ALU - Forced PC + 4
-    // BT_JALR : PCAdder - PC + opr1 , ALU - Forced PC + 4
+    // BT_JAL  : PCAdder - PC + imm  , ALU - PC + 4
+    // BT_JALR : PCAdder - opr1 + imm, ALU - PC + 4
     // BT_BCOND: PCAdder - PC + imm  , ALU - Branch condition
 
     generate
     if (IP_HANDLE_BRANCH == 1) begin: ip_branch_support
-        wire br_neg; // Neg: 0 - zero means doesn't jump, 1 - zero means jump
-        assign {alu_option, alu_op, br_neg} = (ix_ip_br_type == `BT_BCOND) ? (
-                (ix_ip_op == `BC_EQ) ? ({`ALUOPT_SUB, `ALU_ADDSUB, 1'b1}) :
-                (ix_ip_op == `BC_NE) ? ({`ALUOPT_SUB, `ALU_ADDSUB, 1'b0}) :
-                (ix_ip_op == `BC_LT) ? ({1'b0, `ALU_SLT, 1'b0}) :
-                (ix_ip_op == `BC_GE) ? ({1'b0, `ALU_SLT, 1'b1}) :
-                (ix_ip_op == `BC_LTU) ? ({1'b0, `ALU_SLTU, 1'b0}) :
-                (ix_ip_op == `BC_GEU) ? ({1'b0, `ALU_SLTU, 1'b1}) : 5'bx
-                ) : ({ix_ip_option, ix_ip_op, 1'bx});
-        assign alu_operand1 =
-                ((ix_ip_br_type == `BT_NONE) || (ix_ip_br_type == `BT_BCOND)) ?
-                (ix_ip_operand1) : (ix_ip_pc);
-        assign alu_operand2 =
-                ((ix_ip_br_type == `BT_NONE) || (ix_ip_br_type == `BT_BCOND)) ?
-                (ix_ip_operand2) : (64'd4);
-        
-        wire [63:0] br_offset_sext = {{43{ix_ip_boffset[20]}}, ix_ip_boffset};
-        wire [63:0] br_jalr_target_add = ix_ip_operand1 + br_offset_sext;
-        wire [63:0] br_jalr_target = {br_jalr_target_add[63:1], 1'b0};
-        wire [63:0] br_target =
-                (ix_ip_br_type == `BT_NONE) ? (64'bx) :
-                (ix_ip_br_type == `BT_JALR) ? (br_jalr_target) :
-                (ix_ip_pc + br_offset_sext);
-        wire alu_result_zero = alu_result == 64'b0;
+        wire [63:0] br_offset = {{43{ix_ip_br_offset[20]}}, ix_ip_br_offset};
+        wire [63:0] br_target = (ix_ip_br_base + br_offset) & (~64'd1);
         wire br_take =
                 (ix_ip_br_type == `BT_NONE) ? (1'b0) :
                 (ix_ip_br_type == `BT_JAL) ? (1'b1) :
                 (ix_ip_br_type == `BT_JALR) ? (1'b1) :
-                ((br_neg) ? (alu_result_zero) : (!alu_result_zero));
+                ((ix_ip_br_neg) ? (!alu_result[0]) : (alu_result[0]));
         // Test if branch prediction is correct or not
         wire br_correct = (br_take == ix_ip_bp) &&
                 ((br_take) ? (br_target == ix_ip_bt) : 1'b1);
-        assign ip_if_pc_override = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE)
+        wire ip_if_pc_override_comb = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE)
                 && (!br_correct);
-        assign ip_if_new_pc = br_target;
-    end
-    else begin
-        assign alu_op = ix_ip_op;
-        assign alu_option = ix_ip_option;
-        assign alu_operand1 = ix_ip_operand1;
-        assign alu_operand2 = ix_ip_operand2;
+        wire [63:0] ip_if_new_pc_comb = br_target;
+        always @(posedge clk) begin
+            ip_if_pc_override <= ip_if_pc_override_comb;
+            ip_if_new_pc <= ip_if_new_pc_comb;
+        end
     end
     endgenerate
 
     alu alu(
-        .op(alu_op),
-        .option(alu_option),
-        .operand1(alu_operand1),
-        .operand2(alu_operand2),
+        .op(ix_ip_op),
+        .option(ix_ip_option),
+        .operand1(ix_ip_operand1),
+        .operand2(ix_ip_operand2),
         .result(alu_result)
     );
 
@@ -138,7 +112,7 @@ module ip(
         end
         else begin
             if (ix_ip_ready) begin
-                ip_wb_valid <= ix_ip_valid;
+                ip_wb_valid <= ix_ip_valid && !ip_if_pc_override;
             end
             else if (ip_wb_ready && ip_wb_valid) begin
                 ip_wb_valid <= 1'b0;

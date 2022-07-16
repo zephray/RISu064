@@ -28,10 +28,13 @@
 module du(
     input wire [31:0] instr,
     // Decoder output specific for integer pipe
-    output reg [2:0] op,
+    output reg [3:0] op,
     output reg option,
     output reg truncate,
     output reg [1:0] br_type,
+    output reg br_neg,
+    output reg br_base_src,
+    output reg br_inj_pc,
     // Decoder output specific for LS pipe
     output reg mem_sign,
     output reg [1:0] mem_width,
@@ -70,12 +73,15 @@ module du(
 
     always @(*) begin
         legal = 1'b0;
-        op = 3'bx;
+        op = 4'bx;
         option = 1'bx;
         truncate = 1'bx;
         mem_sign = 1'bx;
         mem_width = 2'bx;
         br_type = 2'bx;
+        br_neg = 1'bx;
+        br_base_src = 1'bx;
+        br_inj_pc = 1'b0;
         op_type = 3'bx;
         operand1 = 2'bx;
         operand2 = 2'bx;
@@ -114,7 +120,7 @@ module du(
         end
         `OP_INTIMM: begin
             op_type = `OT_INT;
-            op = funct3;
+            op = {1'b0, funct3};
             if (funct3 == 3'b101)
                 option = funct7[5];
             else
@@ -135,7 +141,7 @@ module du(
         end
         `OP_INTREG: begin
             op_type = `OT_INT;
-            op = funct3;
+            op = {1'b0, funct3};
             option = funct7[5];
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_RS2;
@@ -155,7 +161,7 @@ module du(
         end
         `OP_INTIMMW: begin
             op_type = `OT_INT;
-            op = funct3;
+            op = {1'b0, funct3};
             if (funct3 == 3'b101)
                 option = funct7[5];
             else
@@ -181,7 +187,7 @@ module du(
         end
         `OP_INTREGW: begin
             op_type = `OT_INT;
-            op = funct3;
+            op = {1'b0, funct3};
             option = funct7[5];
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_RS2;
@@ -209,8 +215,10 @@ module du(
             option = `ALUOPT_ADD;
             imm = imm_j_type;
             operand1 = `D_OPR1_PC;
-            operand2 = `D_OPR2_IMM;
+            operand2 = `D_OPR2_4;
             br_type = `BT_JAL;
+            br_base_src = `BB_PC;
+            br_inj_pc = 1'b0;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -220,21 +228,33 @@ module du(
             op = `ALU_ADDSUB;
             option = `ALUOPT_ADD;
             imm = imm_i_type;
-            operand1 = `D_OPR1_RS1;
-            operand2 = `D_OPR2_IMM;
+            operand1 = `D_OPR1_RS1; // For dependency check
+            operand2 = `D_OPR2_4;
             br_type = `BT_JALR;
+            br_base_src = `BB_RS1;
+            br_inj_pc = 1'b1;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
         end
         `OP_BRANCH: begin
             op_type = `OT_BRANCH;
-            op = funct3;
+            //op = funct3;
             option = 1'b0;
+            // br_neg: 0: 1-takes branch; 1: 0-takes branch
+            {op, br_neg} =
+                (funct3 == `BC_EQ) ? ({`ALU_EQ, 1'b0}) :
+                (funct3 == `BC_NE) ? ({`ALU_EQ, 1'b1}) :
+                (funct3 == `BC_LT) ? ({`ALU_SLT, 1'b0}) :
+                (funct3 == `BC_GE) ? ({`ALU_SLT, 1'b1}) :
+                (funct3 == `BC_LTU) ? ({`ALU_SLTU, 1'b0}) :
+                (funct3 == `BC_GEU) ? ({`ALU_SLTU, 1'b1}) : 5'bx;
             imm = imm_b_type;
             operand1 = `D_OPR1_RS1;
             operand2 = `D_OPR2_RS2;
             br_type = `BT_BCOND;
+            br_base_src = `BB_PC;
+            br_inj_pc = 1'b0;
             truncate = 1'b0;
             wb_en = 1'b0;
             legal = 1'b1;

@@ -59,6 +59,8 @@ module lsp(
     output wire         lsp_wb_wb_en,
     output wire         lsp_wb_valid,
     input  wire         lsp_wb_ready,
+    // Abort the current AG stage request
+    input  wire         ag_abort,
     // Exception
     output wire         lsp_unaligned_load,
     output wire         lsp_unaligned_store
@@ -129,7 +131,7 @@ module lsp(
                 dm_req_wdata <= mem_wdata;
                 dm_req_wmask <= mem_wmask;
                 dm_req_wen <= !ix_lsp_wb_en;
-                ag_m_valid <= 1'b1;
+                ag_m_valid <= !ag_abort;
                 ag_m_pc <= ix_lsp_pc;
                 ag_m_dst <= ix_lsp_dst;
                 ag_m_wb_en <= ix_lsp_wb_en;

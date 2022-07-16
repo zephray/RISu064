@@ -38,14 +38,15 @@
 
 // ALU operation
 // Send to integer pipe
-`define ALU_ADDSUB  3'd0
-`define ALU_SLL     3'd1
-`define ALU_SLT     3'd2
-`define ALU_SLTU    3'd3
-`define ALU_XOR     3'd4
-`define ALU_SR      3'd5
-`define ALU_OR      3'd6
-`define ALU_AND     3'd7
+`define ALU_ADDSUB  4'd0
+`define ALU_SLL     4'd1
+`define ALU_SLT     4'd2
+`define ALU_SLTU    4'd3
+`define ALU_XOR     4'd4
+`define ALU_SR      4'd5
+`define ALU_OR      4'd6
+`define ALU_AND     4'd7
+`define ALU_EQ      4'd8
 
 `define ALUOPT_ADD  1'b0
 `define ALUOPT_SUB  1'b1
@@ -89,6 +90,7 @@
 
 `define D_OPR2_RS2      2'd0
 `define D_OPR2_IMM      2'd1
+`define D_OPR2_4        2'd2
 
 // Operation type
 // Different types maybe steered into same FU
@@ -122,6 +124,9 @@
 `define BC_GE           3'd3
 `define BC_LTU          3'd4
 `define BC_GEU          3'd5
+
+`define BB_PC           1'b0
+`define BB_RS1          1'b1
 
 // CSR operations
 `define CSR_RW          2'd1

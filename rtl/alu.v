@@ -25,7 +25,7 @@
 `include "defines.vh"
 
 module alu(
-    input wire [2:0] op,
+    input wire [3:0] op,
     input wire option,
     input wire [63:0] operand1,
     input wire [63:0] operand2,
@@ -86,6 +86,8 @@ module alu(
         (op == `ALU_OR) ?
             (operand1 | operand2) :
         (op == `ALU_AND) ?
-            (operand1 & operand2) : 64'b0;
+            (operand1 & operand2) :
+        (op == `ALU_EQ) ?
+            ((operand1 == operand2) ? 64'd1 : 64'd0) : 64'b0;
 
 endmodule

@@ -135,19 +135,20 @@ module ifp(
     // Output buffering
     wire fifo_valid;
     wire if_dec_pc_override;
-    fifo_2d_fwft #(.WIDTH(162)) if_fifo (
+    wire if_dec_pc_override_late;
+    fifo_2d_fwft #(.WIDTH(163)) if_fifo (
         .clk(clk),
         .rst(rst),
-        .a_data({im_instr, f2_dec_pc, f2_dec_bp, f2_dec_bt, f2_dec_pc_override}),
+        .a_data({im_instr, f2_dec_pc, f2_dec_bp, f2_dec_bt, f2_dec_pc_override, if_pc_override}),
         .a_valid(im_resp_valid),
         /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
         /* verilator lint_on PINCONNECTEMPTY */
-        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override}),
+        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override, if_dec_pc_override_late}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)
     );
 
-    assign if_dec_valid = if_dec_pc_override ? 1'b0 : fifo_valid;
+    assign if_dec_valid = (if_dec_pc_override || if_dec_pc_override_late) ? 1'b0 : fifo_valid;
 
 endmodule

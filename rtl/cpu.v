@@ -101,10 +101,13 @@ module cpu(
     wire [63:0] dec_ix_pc;
     wire        dec_ix_bp;
     wire [63:0] dec_ix_bt;
-    wire [2:0]  dec_ix_op;
+    wire [3:0]  dec_ix_op;
     wire        dec_ix_option;
     wire        dec_ix_truncate;
     wire [1:0]  dec_ix_br_type;
+    wire        dec_ix_br_neg;
+    wire        dec_ix_br_base_src;
+    wire        dec_ix_br_inj_pc;
     wire        dec_ix_mem_sign;
     wire [1:0]  dec_ix_mem_width;
     wire [1:0]  dec_ix_operand1;
@@ -138,6 +141,9 @@ module cpu(
         .dec_ix_option(dec_ix_option),
         .dec_ix_truncate(dec_ix_truncate),
         .dec_ix_br_type(dec_ix_br_type),
+        .dec_ix_br_neg(dec_ix_br_neg),
+        .dec_ix_br_base_src(dec_ix_br_base_src),
+        .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_operand1(dec_ix_operand1),
@@ -158,11 +164,13 @@ module cpu(
     wire [63:0] ix_ip_pc;
     wire [4:0]  ix_ip_dst;
     wire        ix_ip_wb_en;
-    wire [2:0]  ix_ip_op;
+    wire [3:0]  ix_ip_op;
     wire        ix_ip_option;
     wire        ix_ip_truncate;
     wire [1:0]  ix_ip_br_type;
-    wire [20:0] ix_ip_boffset;
+    wire        ix_ip_br_neg;
+    wire [63:0] ix_ip_br_base;
+    wire [20:0] ix_ip_br_offset;
     wire [63:0] ix_ip_operand1;
     wire [63:0] ix_ip_operand2;
     wire        ix_ip_bp;
@@ -212,6 +220,9 @@ module cpu(
         .dec_ix_option(dec_ix_option),
         .dec_ix_truncate(dec_ix_truncate),
         .dec_ix_br_type(dec_ix_br_type),
+        .dec_ix_br_neg(dec_ix_br_neg),
+        .dec_ix_br_base_src(dec_ix_br_base_src),
+        .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_operand1(dec_ix_operand1),
@@ -235,7 +246,9 @@ module cpu(
         .ix_ip_option(ix_ip_option),
         .ix_ip_truncate(ix_ip_truncate),
         .ix_ip_br_type(ix_ip_br_type),
-        .ix_ip_boffset(ix_ip_boffset),
+        .ix_ip_br_neg(ix_ip_br_neg),
+        .ix_ip_br_base(ix_ip_br_base),
+        .ix_ip_br_offset(ix_ip_br_offset),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
@@ -278,7 +291,9 @@ module cpu(
         .ix_ip_option(ix_ip_option),
         .ix_ip_truncate(ix_ip_truncate),
         .ix_ip_br_type(ix_ip_br_type),
-        .ix_ip_boffset(ix_ip_boffset),
+        .ix_ip_br_neg(ix_ip_br_neg),
+        .ix_ip_br_base(ix_ip_br_base),
+        .ix_ip_br_offset(ix_ip_br_offset),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
@@ -332,6 +347,9 @@ module cpu(
         .lsp_wb_wb_en(lsp_wb_wb_en),
         .lsp_wb_valid(lsp_wb_valid),
         .lsp_wb_ready(lsp_wb_ready),
+        // Abort the current AG stage request
+        .ag_abort(pipe_flush),
+        // Exception
         .lsp_unaligned_load(lsp_unaligned_load),
         .lsp_unaligned_store(lsp_unaligned_store)
     );

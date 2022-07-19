@@ -132,3 +132,10 @@
 `define CSR_RW          2'd1
 `define CSR_RS          2'd2
 `define CSR_RC          2'd3
+
+
+// Defines for bus link
+`define WL_Get          1'd0
+`define WL_Put          1'd1
+`define WL_AccessAck    1'd0
+`define WL_AccessDat    1'd1

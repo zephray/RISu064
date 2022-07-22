@@ -72,12 +72,11 @@ module lsp(
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
     
     wire lsp_stalled_memory_resp = (m_wb_req_valid && !dm_resp_valid) && !rst;
-    wire lsp_stalled_memory_req = (!lsp_memreq_fifo_ready) && !rst;
     wire lsp_stalled_back_pressure = (!lsp_wb_ready) && !rst;
-    wire lsp_stalled = lsp_stalled_memory_resp || lsp_stalled_memory_req ||
-            lsp_stalled_back_pressure;
+    wire lsp_stalled = lsp_stalled_memory_resp || lsp_stalled_back_pressure;
     reg lsp_stalled_last;
     assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last);
+    wire lsp_memreq_nack = dm_req_valid && !dm_req_ready;
 
     reg ag_m_valid;
     reg m_ag_access_cancelled;
@@ -87,10 +86,6 @@ module lsp(
     reg [2:0] ag_m_byte_offset;
     reg ag_m_mem_sign;
     reg [1:0] ag_m_mem_width;
-    reg [63:0] ag_m_req_addr;
-    reg [63:0] ag_m_req_wdata;
-    reg [7:0] ag_m_req_wmask;
-    reg ag_m_req_wen;
 
     // Mask and data generation
     wire handshaking = ix_lsp_valid && ix_lsp_ready;
@@ -134,11 +129,11 @@ module lsp(
             ag_m_valid <= 1'b0;
         end
         else begin
-            if (ix_lsp_valid && ix_lsp_ready) begin
-                ag_m_req_addr <= agu_addr;
-                ag_m_req_wdata <= mem_wdata;
-                ag_m_req_wmask <= mem_wmask;
-                ag_m_req_wen <= !ix_lsp_wb_en;
+            if (ix_lsp_valid && ix_lsp_ready && !lsp_memreq_nack) begin
+                dm_req_addr <= agu_addr;
+                dm_req_wdata <= mem_wdata;
+                dm_req_wmask <= mem_wmask;
+                dm_req_wen <= !ix_lsp_wb_en;
                 ag_m_valid <= !ag_abort;
                 ag_m_pc <= ix_lsp_pc;
                 ag_m_dst <= ix_lsp_dst;
@@ -148,7 +143,10 @@ module lsp(
                 ag_m_mem_width <= ix_lsp_mem_width;
             end
             else begin
-                if (!lsp_stalled && lsp_stalled_last) begin
+                if (lsp_memreq_nack) begin
+                    ag_m_valid <= 1'b1;
+                end
+                else if ((!lsp_stalled && lsp_stalled_last)) begin
                     ag_m_valid <= m_ag_access_cancelled;
                     m_ag_access_cancelled <= 1'b0;
                 end
@@ -176,7 +174,7 @@ module lsp(
     reg m_wb_mem_sign;
     reg [1:0] m_wb_mem_width;
     always @(posedge clk) begin
-        m_wb_req_valid <= dm_req_valid;
+        m_wb_req_valid <= dm_req_valid && dm_req_ready;
         if (!lsp_stalled) begin
             m_wb_pc <= ag_m_pc;
             m_wb_dst <= ag_m_dst;
@@ -187,17 +185,7 @@ module lsp(
         end
     end
 
-    wire lsp_memreq_fifo_ready;
-    fifo_1d_fwft #(.WIDTH(137)) lsp_memreq_fifo (
-        .clk(clk),
-        .rst(rst),
-        .a_data({ag_m_req_addr, ag_m_req_wdata, ag_m_req_wmask, ag_m_req_wen}),
-        .a_valid(ag_m_valid && !lsp_stalled),
-        .a_ready(lsp_memreq_fifo_ready),
-        .b_data({dm_req_addr, dm_req_wdata, dm_req_wmask, dm_req_wen}),
-        .b_valid(dm_req_valid),
-        .b_ready(dm_req_ready)
-    );
+    assign dm_req_valid = ag_m_valid && !lsp_stalled;
 
     wire [63:0] mem_rd = dm_resp_rdata;
 

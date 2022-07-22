@@ -60,6 +60,8 @@ module risu(
     wire        dm_req_ready;
     wire [63:0] dm_resp_rdata;
     wire        dm_resp_valid;
+    wire        dm_flush_req;
+    wire        dm_flush_resp;
 
     /* verilator lint_off UNUSED */
     // Only use low 48 bit of address
@@ -87,7 +89,9 @@ module risu(
         .dm_req_valid(dm_req_valid),
         .dm_req_ready(dm_req_ready),
         .dm_resp_rdata(dm_resp_rdata),
-        .dm_resp_valid(dm_resp_valid)
+        .dm_resp_valid(dm_resp_valid),
+        .dm_flush_req(dm_flush_req),
+        .dm_flush_resp(dm_flush_resp)
     );
 
     // Signals after cache, or directly from CPU
@@ -111,6 +115,7 @@ module risu(
 
     generate
     if (USE_L1_CACHE) begin: l1_cache
+        // TODO: Support flushing and invalidating
         l1cache l1i(
             .clk(clk),
             .rst(rst),
@@ -179,6 +184,7 @@ module risu(
         assign dm_resp_valid = db_resp_valid;
         // Tie-off invalidate request: there is no icache to begin with
         assign im_invalidate_resp = im_invalidate_req;
+        assign dm_flush_resp = dm_flush_req;
     end
     endgenerate
 

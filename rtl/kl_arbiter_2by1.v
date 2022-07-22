@@ -109,16 +109,12 @@ module kl_arbiter_2by1(
             case (arb_req_state)
             /* verilator lint_on CASEINCOMPLETE */
             ARB_WAIT_FOR_CMD: begin
-                // Accept connection
-                if ((arb_req_conn_reg == ARB_NONE) &&
-                        (arb_req_grant_id != ARB_NONE)) begin
-                    arb_req_conn_reg <= arb_req_grant_id;
-                end
                 // Process request
                 if (dn_req_ready && dn_req_valid) begin
                     req_burst_counter <= req_burst_size;
                     if (dn_req_wen && (req_burst_size > 1)) begin
                         arb_req_state <= ARB_WAIT_FOR_BURST;
+                        arb_req_conn_reg <= arb_req_grant_id;
                     end
                     else begin
                         arb_req_conn_reg <= ARB_NONE;
@@ -159,14 +155,11 @@ module kl_arbiter_2by1(
             case (arb_resp_state)
             /* verilator lint_on CASEINCOMPLETE */
             ARB_WAIT_FOR_CMD: begin
-                // Accept connection
-                if ((arb_resp_conn_reg == ARB_NONE) && (dn_resp_valid)) begin
-                    arb_resp_conn_reg <= arb_resp_grant_id;
-                end
                 // Process request
                 if (dn_resp_ready && dn_resp_valid) begin
                     resp_burst_counter <= resp_burst_size - 1;
                     if (resp_burst_size > 1) begin
+                        arb_resp_conn_reg <= arb_resp_grant_id;
                         arb_resp_state <= ARB_WAIT_FOR_BURST;
                     end
                     else begin

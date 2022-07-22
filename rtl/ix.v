@@ -100,7 +100,14 @@ module ix(
     input  wire [4:0]   lsp_wb_dst,
     input  wire [63:0]  lsp_wb_result,
     input  wire         lsp_wb_wb_en,
-    input  wire         lsp_wb_valid
+    input  wire         lsp_wb_valid,
+    // Fence I
+    output reg          im_invalidate_req,
+    input  wire         im_invalidate_resp,
+    output reg          dm_flush_req,
+    input  wire         dm_flush_resp,
+    output reg          ix_if_pc_override,
+    output reg  [63:0]  ix_if_new_pc
 );
 
     // Hazard detection
@@ -214,7 +221,7 @@ module ix(
             (dec_ix_op_type == `OT_CSR) && ix_barrier_done && !pipe_flush;
     // Wait for LS pipe to finish
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
-    wire ix_fencei_done = 1'b0;
+    reg ix_fencei_done = 1'b0;
     wire ix_fence_done = (dec_ix_valid) && (dec_ix_legal) &&
             (dec_ix_op_type == `OT_FENCE) && (ix_fenced_done) &&
             (!dec_ix_fencei || ix_fencei_done);
@@ -230,6 +237,36 @@ module ix(
 
     wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
     assign dec_ix_ready = !rst && !ix_stall;
+
+    // Fencei handling
+    reg im_invalidate_done, dm_flush_done;
+    always @(posedge clk) begin
+        if ((!rst) && (dec_ix_valid) && (dec_ix_legal) && (dec_ix_fencei) &&
+                (!ix_fencei_done)) begin
+            im_invalidate_req <= 1'b1;
+            dm_flush_req <= 1'b1;
+            im_invalidate_done <= 1'b0;
+            dm_flush_done <= 1'b0;
+            if (im_invalidate_resp == 1'b1) begin
+                im_invalidate_req <= 1'b0;
+                im_invalidate_done <= 1'b1;
+            end
+            if (dm_flush_resp == 1'b1) begin
+                dm_flush_req <= 1'b0;
+                dm_flush_done <= 1'b1;
+            end
+            if (dm_flush_done && im_invalidate_done) begin
+                ix_if_pc_override <= 1'b1;
+                ix_if_new_pc <= dec_ix_pc + 4;
+                ix_fencei_done <= 1'b1;
+            end
+        end
+        else begin
+            ix_if_pc_override <= 1'b0;
+            ix_if_new_pc <= 64'bx;
+            ix_fencei_done <= 1'b0;
+        end
+    end
 
     always @(posedge clk) begin
         if (rst) begin

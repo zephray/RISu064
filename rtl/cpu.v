@@ -41,7 +41,9 @@ module cpu(
     output wire         dm_req_valid,
     input  wire         dm_req_ready,
     input  wire [63:0]  dm_resp_rdata,
-    input  wire         dm_resp_valid
+    input  wire         dm_resp_valid,
+    output wire         dm_flush_req,
+    input  wire         dm_flush_resp
 );
     // TODO
     wire        lsp_unaligned_load;
@@ -77,7 +79,11 @@ module cpu(
     wire        if_dec_ready;
     wire        ip_if_pc_override;
     wire [63:0] ip_if_new_pc;
-    wire        pipe_flush = ip_if_pc_override;
+    wire        ix_if_pc_override;
+    wire [63:0] ix_if_new_pc;
+    wire        if_pc_override = ip_if_pc_override || ix_if_pc_override;
+    wire [63:0] if_new_pc = ip_if_pc_override ? ip_if_new_pc : ix_if_new_pc;
+    wire        pipe_flush = if_pc_override;
 
     ifp ifp (
         .clk(clk),
@@ -96,8 +102,8 @@ module cpu(
         .if_dec_valid(if_dec_valid),
         .if_dec_ready(if_dec_ready),
         // Next PC
-        .ip_if_pc_override(ip_if_pc_override),
-        .ip_if_new_pc(ip_if_new_pc)
+        .if_pc_override(if_pc_override),
+        .if_new_pc(if_new_pc)
     );
 
     // Decode stage
@@ -274,13 +280,21 @@ module cpu(
         .ix_lsp_mem_width(ix_lsp_mem_width),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
+         // Hazard detection & Bypassing
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),
         .lsp_wb_wb_en(lsp_wb_wb_en),
-        .lsp_wb_valid(lsp_wb_valid)
+        .lsp_wb_valid(lsp_wb_valid),
+        // Fence I
+        .im_invalidate_req(im_invalidate_req),
+        .im_invalidate_resp(im_invalidate_resp),
+        .dm_flush_req(dm_flush_req),
+        .dm_flush_resp(dm_flush_resp),
+        .ix_if_pc_override(ix_if_pc_override),
+        .ix_if_new_pc(ix_if_new_pc)
     );
 
     ip ip0(

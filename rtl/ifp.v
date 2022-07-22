@@ -86,26 +86,25 @@ module ifp(
             (f1_f2_pc + 4); // PC incr
 
     always @(posedge clk) begin
+        // Continue only if pipeline is not stalled
+        if (!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack) begin
+            f1_f2_valid <= 1'b1;
+            f1_f2_pc <= next_pc;
+            f1_f2_bp <= bp_result;
+            f1_f2_bt <= btb_result;
+        end
+        else begin
+            if ((!ifp_stalled && ifp_stalled_last) || ifp_memreq_nack)
+                f1_f2_valid <= 1'b1;
+            else
+                f1_f2_valid <= 1'b0;
+        end
+        ifp_stalled_last <= ifp_stalled;
+
         if (rst) begin
             f1_f2_pc <= RESET_VECTOR - 4;
             f1_f2_valid <= 1'b0;
             ifp_stalled_last <= 1'b0;
-        end
-        else begin
-            // Continue only if pipeline is not stalled
-            if (!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack) begin
-                f1_f2_valid <= 1'b1;
-                f1_f2_pc <= next_pc;
-                f1_f2_bp <= bp_result;
-                f1_f2_bt <= btb_result;
-            end
-            else begin
-                if ((!ifp_stalled && ifp_stalled_last) || ifp_memreq_nack)
-                    f1_f2_valid <= 1'b1;
-                else
-                    f1_f2_valid <= 1'b0;
-            end
-            ifp_stalled_last <= ifp_stalled;
         end
     end
 

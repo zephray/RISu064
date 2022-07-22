@@ -324,98 +324,47 @@ module l1cache(
             {p2_addr_tag, p2_cache_meta_waddr, 2'b0, 3'b0};
     
     always@(posedge clk) begin
-        if (rst) begin
-            cache_state <= STATE_RESET;
-            mem_resp_ready <= 1'b0;
+        /* verilator lint_off CASEINCOMPLETE */
+        case (cache_state)
+        /* verilator lint_on CASEINCOMPLETE */
+        STATE_RESET: begin
+            cache_meta_we_reg[0] <= 1'b1;
+            cache_meta_we_reg[1] <= 1'b1;
+            invalidate_counter <= invalidate_counter-1;
+            if (invalidate_counter == 8'd0) begin
+                cache_state <= STATE_PREPARE;
+            end
+        end
+        STATE_PREPARE: begin
             cache_meta_we_reg[0] <= 1'b0;
             cache_meta_we_reg[1] <= 1'b0;
-            cache_data_we_reg[0] <= 1'b0;
-            cache_data_we_reg[1] <= 1'b1;
-            cache_way_wb_src <= CACHE_WB_FLUSH;
-            invalidate_counter <= CACHE_BLOCK - 1;
-            invalidate_en <= 1'b1;
-            p2_core_req_valid <= 1'b0;
+            cache_way_wb_src <= CACHE_WB_CORE;
+            p2_core_req_addr <= core_req_addr;
+            p2_core_req_wen <= core_req_wen;
+            p2_core_req_wdata <= core_req_wdata;
+            p2_core_req_wmask <= core_req_wmask;
+            p2_core_req_valid <= core_req_valid;
+            cache_state <= STATE_READY;
         end
-        else begin
-            /* verilator lint_off CASEINCOMPLETE */
-            case (cache_state)
-            /* verilator lint_on CASEINCOMPLETE */
-            STATE_RESET: begin
-                cache_meta_we_reg[0] <= 1'b1;
-                cache_meta_we_reg[1] <= 1'b1;
-                invalidate_counter <= invalidate_counter-1;
-                if (invalidate_counter == 8'd0) begin
-                    cache_state <= STATE_PREPARE;
-                end
-            end
-            STATE_PREPARE: begin
-                cache_meta_we_reg[0] <= 1'b0;
-                cache_meta_we_reg[1] <= 1'b0;
-                cache_way_wb_src <= CACHE_WB_CORE;
-                p2_core_req_addr <= core_req_addr;
-                p2_core_req_wen <= core_req_wen;
-                p2_core_req_wdata <= core_req_wdata;
-                p2_core_req_wmask <= core_req_wmask;
-                p2_core_req_valid <= core_req_valid;
-                cache_state <= STATE_READY;
-            end
-            STATE_READY: begin
-                invalidate_en <= 1'b0;
-                // At this state, way_we and core_resp_rdata / resp_valid
-                // are supplied by combinational logic for 1-cycle hit.
-                if (p2_cache_miss) begin
-                    // Requested but miss
-                    // Check if the cache line needed to be flushed before RW
-                    if (p2_cache_meta_rd[cache_victim][BIT_VALID] &&
-                            p2_cache_meta_rd[cache_victim][BIT_DIRTY]) begin
-                        // flush is required before overwritting
-                        reload_counter <= 0;
-                        // Need to wait for a cycle for cache line read
-                        // Issue write next cycle
-                        cache_state <= STATE_FLUSH;
-                        $display("Cache miss, way %d flush.", cache_victim);
-                        //$stop;
-                    end
-                    else begin
-                        // flush is not required
-                        reload_counter <= 0;
-                        // Issue Reload request
-                        mem_req_wen <= 1'b0;
-                        mem_req_addr <= cache_load_mem_addr;
-                        mem_req_valid <= 1'b1;
-                        mem_resp_ready <= 1'b1;
-                        cache_way_wb_src <= CACHE_WB_MEM;
-                        cache_state <= STATE_LOAD;
-                        cache_data_we_reg[cache_victim] <= 1'b1;
-                        $display("Cache miss, way %d load.", cache_victim);
-                    end
+        STATE_READY: begin
+            invalidate_en <= 1'b0;
+            // At this state, way_we and core_resp_rdata / resp_valid
+            // are supplied by combinational logic for 1-cycle hit.
+            if (p2_cache_miss) begin
+                // Requested but miss
+                // Check if the cache line needed to be flushed before RW
+                if (p2_cache_meta_rd[cache_victim][BIT_VALID] &&
+                        p2_cache_meta_rd[cache_victim][BIT_DIRTY]) begin
+                    // flush is required before overwritting
+                    reload_counter <= 0;
+                    // Need to wait for a cycle for cache line read
+                    // Issue write next cycle
+                    cache_state <= STATE_FLUSH;
+                    $display("Cache miss, way %d flush.", cache_victim);
+                    //$stop;
                 end
                 else begin
-                    p2_core_req_addr <= core_req_addr;
-                    p2_core_req_wen <= core_req_wen;
-                    p2_core_req_wdata <= core_req_wdata;
-                    p2_core_req_wmask <= core_req_wmask;
-                    p2_core_req_valid <= core_req_valid;
-                end
-            end
-            STATE_FLUSH: begin
-                mem_req_wen <= 1'b1;
-                mem_req_addr <= cache_flush_mem_addr;
-                mem_req_valid <= 1'b1;
-                if (mem_req_ready) begin
-                    // Data in last beat has been accepted, continue to next beat
-                    reload_counter <= reload_counter + 1;
-                    if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
-                        // Writeback finished, waiting for acknowledge from L2
-                        cache_state <= STATE_FLUSH_WAIT_ACK;
-                        mem_resp_ready <= 1'b1;
-                    end
-                end
-            end
-            STATE_FLUSH_WAIT_ACK: begin
-                mem_req_valid <= 1'b0;
-                if (mem_resp_valid) begin
-                    mem_resp_ready <= 1'b0;
+                    // flush is not required
                     reload_counter <= 0;
                     // Issue Reload request
                     mem_req_wen <= 1'b0;
@@ -423,49 +372,99 @@ module l1cache(
                     mem_req_valid <= 1'b1;
                     mem_resp_ready <= 1'b1;
                     cache_way_wb_src <= CACHE_WB_MEM;
-                    cache_data_we_reg[cache_victim] <= 1'b1;
                     cache_state <= STATE_LOAD;
+                    cache_data_we_reg[cache_victim] <= 1'b1;
+                    $display("Cache miss, way %d load.", cache_victim);
                 end
             end
-            STATE_LOAD: begin
-                // Ack the A channel request if accepted
-                if (mem_req_ready) begin
-                    mem_req_valid <= 1'b0;
-                end
-                // Writeback way data if got a beat from L2
-                if (mem_resp_valid) begin
-                    reload_counter <= reload_counter + 1;
-                    if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
-                        mem_resp_ready <= 1'b0;
-                        cache_state <= STATE_WAY_WB;
-                        cache_meta_we_reg[cache_victim] <= 1'b1;
-                        cache_data_we_reg[cache_victim] <= 1'b0;
-                        // Start data RAM read one cycle earlier
-                        reload_counter <=
-                                core_dw_addr[CACHE_LINE_IN_BLOCK_ABITS-1:0];
-                    end
-                end
-            end
-            STATE_WAY_WB: begin
-                // Finish way writeback
-                cache_meta_we_reg[0] <= 1'b0;
-                cache_meta_we_reg[1] <= 1'b0;
-                cache_data_we_reg[0] <= 1'b0;
-                cache_data_we_reg[1] <= 1'b0;
-                cache_way_wb_src <= CACHE_WB_CORE;
-                cache_state <= STATE_RETRY;
-            end
-            STATE_RETRY: begin
-                // Essentially same as STATE_PREPARE, but consider output as
-                // valid
+            else begin
                 p2_core_req_addr <= core_req_addr;
                 p2_core_req_wen <= core_req_wen;
                 p2_core_req_wdata <= core_req_wdata;
                 p2_core_req_wmask <= core_req_wmask;
                 p2_core_req_valid <= core_req_valid;
-                cache_state <= STATE_READY;
             end
-            endcase
+        end
+        STATE_FLUSH: begin
+            mem_req_wen <= 1'b1;
+            mem_req_addr <= cache_flush_mem_addr;
+            mem_req_valid <= 1'b1;
+            if (mem_req_ready) begin
+                // Data in last beat has been accepted, continue to next beat
+                reload_counter <= reload_counter + 1;
+                if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
+                    // Writeback finished, waiting for acknowledge from L2
+                    cache_state <= STATE_FLUSH_WAIT_ACK;
+                    mem_resp_ready <= 1'b1;
+                end
+            end
+        end
+        STATE_FLUSH_WAIT_ACK: begin
+            mem_req_valid <= 1'b0;
+            if (mem_resp_valid) begin
+                mem_resp_ready <= 1'b0;
+                reload_counter <= 0;
+                // Issue Reload request
+                mem_req_wen <= 1'b0;
+                mem_req_addr <= cache_load_mem_addr;
+                mem_req_valid <= 1'b1;
+                mem_resp_ready <= 1'b1;
+                cache_way_wb_src <= CACHE_WB_MEM;
+                cache_data_we_reg[cache_victim] <= 1'b1;
+                cache_state <= STATE_LOAD;
+            end
+        end
+        STATE_LOAD: begin
+            // Ack the A channel request if accepted
+            if (mem_req_ready) begin
+                mem_req_valid <= 1'b0;
+            end
+            // Writeback way data if got a beat from L2
+            if (mem_resp_valid) begin
+                reload_counter <= reload_counter + 1;
+                if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
+                    mem_resp_ready <= 1'b0;
+                    cache_state <= STATE_WAY_WB;
+                    cache_meta_we_reg[cache_victim] <= 1'b1;
+                    cache_data_we_reg[cache_victim] <= 1'b0;
+                    // Start data RAM read one cycle earlier
+                    reload_counter <=
+                            core_dw_addr[CACHE_LINE_IN_BLOCK_ABITS-1:0];
+                end
+            end
+        end
+        STATE_WAY_WB: begin
+            // Finish way writeback
+            cache_meta_we_reg[0] <= 1'b0;
+            cache_meta_we_reg[1] <= 1'b0;
+            cache_data_we_reg[0] <= 1'b0;
+            cache_data_we_reg[1] <= 1'b0;
+            cache_way_wb_src <= CACHE_WB_CORE;
+            cache_state <= STATE_RETRY;
+        end
+        STATE_RETRY: begin
+            // Essentially same as STATE_PREPARE, but consider output as
+            // valid
+            p2_core_req_addr <= core_req_addr;
+            p2_core_req_wen <= core_req_wen;
+            p2_core_req_wdata <= core_req_wdata;
+            p2_core_req_wmask <= core_req_wmask;
+            p2_core_req_valid <= core_req_valid;
+            cache_state <= STATE_READY;
+        end
+        endcase
+
+        if (rst) begin
+            cache_state <= STATE_RESET;
+            mem_resp_ready <= 1'b0;
+            cache_meta_we_reg[0] <= 1'b0;
+            cache_meta_we_reg[1] <= 1'b0;
+            cache_data_we_reg[0] <= 1'b0;
+            cache_data_we_reg[1] <= 1'b0;
+            cache_way_wb_src <= CACHE_WB_FLUSH;
+            invalidate_counter <= CACHE_BLOCK - 1;
+            invalidate_en <= 1'b1;
+            p2_core_req_valid <= 1'b0;
         end
     end
     

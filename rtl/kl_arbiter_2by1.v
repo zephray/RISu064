@@ -90,9 +90,9 @@ module kl_arbiter_2by1(
         .grant(arb_req_grant)
     );
 
-    localparam ARB_WAIT_FOR_CMD = 2'd0;
-    localparam ARB_WAIT_FOR_BURST = 2'd1;
-    reg [1:0] arb_req_state;
+    localparam ARB_WAIT_FOR_CMD = 1'd0;
+    localparam ARB_WAIT_FOR_BURST = 1'd1;
+    reg [0:0] arb_req_state;
     reg [MAX_BURST_WIDTH-1:0] req_burst_counter;
     wire [MAX_BURST_WIDTH-1:0] req_burst_counter_dec = req_burst_counter - 1;
     wire [MAX_BURST_WIDTH-1:0] req_burst_size = (1 << dn_req_size) / 8;
@@ -100,38 +100,35 @@ module kl_arbiter_2by1(
     wire up_req_ready = dn_req_ready && (arb_req_state == ARB_WAIT_FOR_CMD);
 
     always @(posedge clk) begin
+        case (arb_req_state)
+        ARB_WAIT_FOR_CMD: begin
+            // Process request
+            if (dn_req_ready && dn_req_valid) begin
+                req_burst_counter <= req_burst_size;
+                if (dn_req_wen && (req_burst_size > 1)) begin
+                    arb_req_state <= ARB_WAIT_FOR_BURST;
+                    arb_req_conn_reg <= arb_req_grant_id;
+                end
+                else begin
+                    arb_req_conn_reg <= ARB_NONE;
+                    arb_req_state <= ARB_WAIT_FOR_CMD;
+                end
+            end
+        end
+        ARB_WAIT_FOR_BURST: begin
+            if (dn_req_ready && dn_req_valid) begin
+                if (req_burst_counter_dec == 0) begin
+                    arb_req_conn_reg <= ARB_NONE;
+                    arb_req_state <= ARB_WAIT_FOR_CMD;
+                end
+                req_burst_counter <= req_burst_counter_dec;
+            end
+        end
+        endcase
+
         if (rst) begin
             arb_req_conn_reg <= ARB_NONE;
             arb_req_state <= ARB_WAIT_FOR_CMD;
-        end
-        else begin
-            /* verilator lint_off CASEINCOMPLETE */
-            case (arb_req_state)
-            /* verilator lint_on CASEINCOMPLETE */
-            ARB_WAIT_FOR_CMD: begin
-                // Process request
-                if (dn_req_ready && dn_req_valid) begin
-                    req_burst_counter <= req_burst_size;
-                    if (dn_req_wen && (req_burst_size > 1)) begin
-                        arb_req_state <= ARB_WAIT_FOR_BURST;
-                        arb_req_conn_reg <= arb_req_grant_id;
-                    end
-                    else begin
-                        arb_req_conn_reg <= ARB_NONE;
-                        arb_req_state <= ARB_WAIT_FOR_CMD;
-                    end
-                end
-            end
-            ARB_WAIT_FOR_BURST: begin
-                if (dn_req_ready && dn_req_valid) begin
-                    if (req_burst_counter_dec == 0) begin
-                        arb_req_conn_reg <= ARB_NONE;
-                        arb_req_state <= ARB_WAIT_FOR_CMD;
-                    end
-                    req_burst_counter <= req_burst_counter_dec;
-                end
-            end
-            endcase
         end
     end
 
@@ -141,43 +138,41 @@ module kl_arbiter_2by1(
                     ((dn_resp_dstid == UP1_SRC_ID) ? ARB_UP1 : ARB_NONE);
     wire [1:0] arb_resp_conn = (arb_resp_conn_reg == ARB_NONE) ?
             ((dn_resp_valid) ? arb_resp_grant_id : ARB_NONE) : arb_resp_conn_reg;
-    reg [1:0] arb_resp_state;
+    reg [0:0] arb_resp_state;
     reg [MAX_BURST_WIDTH-1:0] resp_burst_counter;
     wire [MAX_BURST_WIDTH-1:0] resp_burst_counter_dec = resp_burst_counter - 1;
     wire [MAX_BURST_WIDTH-1:0] resp_burst_size = (1 << dn_resp_size) / 8;
     
     always @(posedge clk) begin
+        case (arb_resp_state)
+        ARB_WAIT_FOR_CMD: begin
+            // Process request
+            if (dn_resp_ready && dn_resp_valid) begin
+                resp_burst_counter <= resp_burst_size - 1;
+                if (resp_burst_size > 1) begin
+                    arb_resp_conn_reg <= arb_resp_grant_id;
+                    arb_resp_state <= ARB_WAIT_FOR_BURST;
+                end
+                else begin
+                    arb_resp_conn_reg <= ARB_NONE;
+                    arb_resp_state <= ARB_WAIT_FOR_CMD;
+                end
+            end
+        end
+        ARB_WAIT_FOR_BURST: begin
+            if (dn_resp_ready && dn_resp_valid) begin
+                if (resp_burst_counter_dec == 0) begin
+                    arb_resp_conn_reg <= ARB_NONE;
+                    arb_resp_state <= ARB_WAIT_FOR_CMD;
+                end
+                resp_burst_counter <= resp_burst_counter_dec;
+            end
+        end
+        endcase
+
         if (rst) begin
             arb_resp_conn_reg <= ARB_NONE;
-        end
-        else begin
-            /* verilator lint_off CASEINCOMPLETE */
-            case (arb_resp_state)
-            /* verilator lint_on CASEINCOMPLETE */
-            ARB_WAIT_FOR_CMD: begin
-                // Process request
-                if (dn_resp_ready && dn_resp_valid) begin
-                    resp_burst_counter <= resp_burst_size - 1;
-                    if (resp_burst_size > 1) begin
-                        arb_resp_conn_reg <= arb_resp_grant_id;
-                        arb_resp_state <= ARB_WAIT_FOR_BURST;
-                    end
-                    else begin
-                        arb_resp_conn_reg <= ARB_NONE;
-                        arb_resp_state <= ARB_WAIT_FOR_CMD;
-                    end
-                end
-            end
-            ARB_WAIT_FOR_BURST: begin
-                if (dn_resp_ready && dn_resp_valid) begin
-                    if (resp_burst_counter_dec == 0) begin
-                        arb_resp_conn_reg <= ARB_NONE;
-                        arb_resp_state <= ARB_WAIT_FOR_CMD;
-                    end
-                    resp_burst_counter <= resp_burst_counter_dec;
-                end
-            end
-            endcase
+            arb_resp_state <= ARB_WAIT_FOR_CMD;
         end
     end
 

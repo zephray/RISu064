@@ -124,39 +124,38 @@ module lsp(
 
     // AG stage
     always @(posedge clk) begin
+        if (ix_lsp_valid && ix_lsp_ready && !lsp_memreq_nack) begin
+            dm_req_addr <= agu_addr;
+            dm_req_wdata <= mem_wdata;
+            dm_req_wmask <= mem_wmask;
+            dm_req_wen <= !ix_lsp_wb_en;
+            ag_m_valid <= !ag_abort;
+            ag_m_pc <= ix_lsp_pc;
+            ag_m_dst <= ix_lsp_dst;
+            ag_m_wb_en <= ix_lsp_wb_en;
+            ag_m_byte_offset <= agu_addr[2:0];
+            ag_m_mem_sign <= ix_lsp_mem_sign;
+            ag_m_mem_width <= ix_lsp_mem_width;
+        end
+        else begin
+            if (lsp_memreq_nack) begin
+                ag_m_valid <= 1'b1;
+            end
+            else if ((!lsp_stalled && lsp_stalled_last)) begin
+                ag_m_valid <= m_ag_access_cancelled;
+                m_ag_access_cancelled <= 1'b0;
+            end
+            else
+                ag_m_valid <= 1'b0;
+        end
+        if (ag_m_valid && lsp_stalled) begin
+            m_ag_access_cancelled <= 1'b1;
+        end
+        lsp_stalled_last <= lsp_stalled;
+
         if (rst) begin
             lsp_stalled_last <= 1'b0;
             ag_m_valid <= 1'b0;
-        end
-        else begin
-            if (ix_lsp_valid && ix_lsp_ready && !lsp_memreq_nack) begin
-                dm_req_addr <= agu_addr;
-                dm_req_wdata <= mem_wdata;
-                dm_req_wmask <= mem_wmask;
-                dm_req_wen <= !ix_lsp_wb_en;
-                ag_m_valid <= !ag_abort;
-                ag_m_pc <= ix_lsp_pc;
-                ag_m_dst <= ix_lsp_dst;
-                ag_m_wb_en <= ix_lsp_wb_en;
-                ag_m_byte_offset <= agu_addr[2:0];
-                ag_m_mem_sign <= ix_lsp_mem_sign;
-                ag_m_mem_width <= ix_lsp_mem_width;
-            end
-            else begin
-                if (lsp_memreq_nack) begin
-                    ag_m_valid <= 1'b1;
-                end
-                else if ((!lsp_stalled && lsp_stalled_last)) begin
-                    ag_m_valid <= m_ag_access_cancelled;
-                    m_ag_access_cancelled <= 1'b0;
-                end
-                else
-                    ag_m_valid <= 1'b0;
-            end
-            if (ag_m_valid && lsp_stalled) begin
-                m_ag_access_cancelled <= 1'b1;
-            end
-            lsp_stalled_last <= lsp_stalled;
         end
     end
 

@@ -107,16 +107,15 @@ module ip(
     assign ix_ip_ready = ip_wb_ready;
 
     always @(posedge clk) begin
-        if (rst) begin
+        if (ix_ip_ready) begin
+            ip_wb_valid <= ix_ip_valid && !ip_if_pc_override;
+        end
+        else if (ip_wb_ready && ip_wb_valid) begin
             ip_wb_valid <= 1'b0;
         end
-        else begin
-            if (ix_ip_ready) begin
-                ip_wb_valid <= ix_ip_valid && !ip_if_pc_override;
-            end
-            else if (ip_wb_ready && ip_wb_valid) begin
-                ip_wb_valid <= 1'b0;
-            end
+
+        if (rst) begin
+            ip_wb_valid <= 1'b0;
         end
     end
 

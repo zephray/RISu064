@@ -269,45 +269,44 @@ module ix(
     end
 
     always @(posedge clk) begin
+        if (ix_issue_ip0) begin
+            ix_ip_op <= dec_ix_op;
+            ix_ip_option <= dec_ix_option;
+            ix_ip_truncate <= dec_ix_truncate;
+            ix_ip_br_type <= dec_ix_br_type;
+            ix_ip_br_neg <= dec_ix_br_neg;
+            ix_ip_br_offset <= dec_ix_imm[20:0];
+            ix_ip_br_base <= br_base;
+            ix_ip_operand1 <= operand1_value;
+            ix_ip_operand2 <= operand2_value;
+            ix_ip_bp <= dec_ix_bp;
+            ix_ip_bt <= dec_ix_bt;
+            ix_ip_wb_en <= dec_ix_wb_en;
+            ix_ip_dst <= dec_ix_rd;
+            ix_ip_pc <= dec_ix_pc;
+            ix_ip_valid <= 1'b1;
+        end
+        else if (ix_ip_ready) begin
+            ix_ip_valid <= 1'b0;
+        end
+        if (ix_issue_lsp) begin
+            ix_lsp_base <= operand1_value;
+            ix_lsp_offset <= dec_ix_imm[11:0];
+            ix_lsp_source <= operand2_value;
+            ix_lsp_mem_sign <= dec_ix_mem_sign;
+            ix_lsp_mem_width <= dec_ix_mem_width;
+            ix_lsp_wb_en <= dec_ix_wb_en;
+            ix_lsp_dst <= dec_ix_rd;
+            ix_lsp_pc <= dec_ix_pc;
+            ix_lsp_valid <= 1'b1;
+        end
+        else if (ix_lsp_ready) begin
+            ix_lsp_valid <= 1'b0;
+        end
+
         if (rst) begin
             ix_ip_valid <= 1'b0;
             ix_lsp_valid <= 1'b0;
-        end
-        else begin
-            if (ix_issue_ip0) begin
-                ix_ip_op <= dec_ix_op;
-                ix_ip_option <= dec_ix_option;
-                ix_ip_truncate <= dec_ix_truncate;
-                ix_ip_br_type <= dec_ix_br_type;
-                ix_ip_br_neg <= dec_ix_br_neg;
-                ix_ip_br_offset <= dec_ix_imm[20:0];
-                ix_ip_br_base <= br_base;
-                ix_ip_operand1 <= operand1_value;
-                ix_ip_operand2 <= operand2_value;
-                ix_ip_bp <= dec_ix_bp;
-                ix_ip_bt <= dec_ix_bt;
-                ix_ip_wb_en <= dec_ix_wb_en;
-                ix_ip_dst <= dec_ix_rd;
-                ix_ip_pc <= dec_ix_pc;
-                ix_ip_valid <= 1'b1;
-            end
-            else if (ix_ip_ready) begin
-                ix_ip_valid <= 1'b0;
-            end
-            if (ix_issue_lsp) begin
-                ix_lsp_base <= operand1_value;
-                ix_lsp_offset <= dec_ix_imm[11:0];
-                ix_lsp_source <= operand2_value;
-                ix_lsp_mem_sign <= dec_ix_mem_sign;
-                ix_lsp_mem_width <= dec_ix_mem_width;
-                ix_lsp_wb_en <= dec_ix_wb_en;
-                ix_lsp_dst <= dec_ix_rd;
-                ix_lsp_pc <= dec_ix_pc;
-                ix_lsp_valid <= 1'b1;
-            end
-            else if (ix_lsp_ready) begin
-                ix_lsp_valid <= 1'b0;
-            end
         end
     end
 endmodule

@@ -25,8 +25,10 @@
 `include "defines.vh"
 
 module wb(
+    /* verilator lint_off UNUSED */
     input  wire         clk,
     input  wire         rst,
+    /* verilator lint_on UNUSED */
     // To register file
     output wire         rf_wen,
     output wire [4:0]   rf_wdst,
@@ -34,14 +36,18 @@ module wb(
     // From integer pipe
     input  wire [4:0]   ip_wb_dst,
     input  wire [63:0]  ip_wb_result,
+    /* verilator lint_off UNUSED */
     input  wire [63:0]  ip_wb_pc,
+    /* verilator lint_on UNUSED */
     input  wire         ip_wb_wb_en,
     input  wire         ip_wb_valid,
     output wire         ip_wb_ready,
     // From load-store pipe
     input  wire [4:0]   lsp_wb_dst,
     input  wire [63:0]  lsp_wb_result,
+    /* verilator lint_off UNUSED */
     input  wire [63:0]  lsp_wb_pc,
+    /* verilator lint_on UNUSED */
     input  wire         lsp_wb_wb_en,
     input  wire         lsp_wb_valid,
     output wire         lsp_wb_ready

@@ -120,12 +120,14 @@ module ix(
     wire lsp_ag_active = ix_lsp_valid;
     wire lsp_mem_active = lsp_ix_mem_busy;
     wire lsp_wb_active = lsp_wb_valid && lsp_wb_wb_en;
+    /* verilator lint_off UNUSED */
     reg dbg_stl_ipe [0:1];
     reg dbg_fwd_ipe [0:1];
     reg dbg_fwd_ipw [0:1];
     reg dbg_stl_lag [0:1];
     reg dbg_stl_lma [0:1];
     reg dbg_fwd_lwb [0:1];
+    /* verilator lint_on UNUSED */
     genvar i;
     generate
         for (i = 0; i < 2; i = i + 1) begin

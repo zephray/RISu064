@@ -29,6 +29,7 @@ module cpu(
     input  wire         rst,
     output wire [63:0]  im_req_addr,
     output wire         im_req_valid,
+    input  wire         im_req_ready,
     input  wire [63:0]  im_resp_rdata,
     input  wire         im_resp_valid,
     output wire         im_invalidate_req,
@@ -38,6 +39,7 @@ module cpu(
     output wire [7:0]   dm_req_wmask,
     output wire         dm_req_wen,
     output wire         dm_req_valid,
+    input  wire         dm_req_ready,
     input  wire [63:0]  dm_resp_rdata,
     input  wire         dm_resp_valid
 );
@@ -83,6 +85,7 @@ module cpu(
         // I-mem interface
         .im_req_addr(im_req_addr),
         .im_req_valid(im_req_valid),
+        .im_req_ready(im_req_ready),
         .im_resp_rdata(im_resp_rdata),
         .im_resp_valid(im_resp_valid),
         // Decoder interface
@@ -323,6 +326,7 @@ module cpu(
         .dm_req_wmask(dm_req_wmask),
         .dm_req_wen(dm_req_wen),
         .dm_req_valid(dm_req_valid),
+        .dm_req_ready(dm_req_ready),
         .dm_resp_rdata(dm_resp_rdata),
         .dm_resp_valid(dm_resp_valid),
         // From decoder

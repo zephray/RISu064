@@ -30,7 +30,7 @@
 #include "Vrisu.h"
 #include "Vrisu___024root.h"
 
-#include "memsim.h"
+#include "klmemsim.h"
 #include "earliercon.h"
 
 #define RAM_BASE 0x80000000
@@ -49,8 +49,7 @@ bool unlimited = true;
 bool verbose = false;
 uint64_t max_cycles;
 
-Memsim *ram_iport;
-Memsim *ram_dport;
+KLMemsim *ram;
 Earliercon *earliercon;
 
 void tick() {
@@ -60,24 +59,28 @@ void tick() {
     // clock edge (DFF)
 
     // Note: accessing not mapped address causes deadlock
-    uint64_t im_rdata = core->im_rdata;
-    uint8_t im_ready = core->im_ready;
-    uint64_t dm_rdata = core->dm_rdata;
-    uint8_t dm_ready = core->dm_ready;
+    uint8_t bus_req_ready = core->bus_req_ready;
+    uint64_t bus_resp_rdata = core->bus_resp_rdata;
+    uint8_t bus_resp_size = core->bus_resp_size;
+    uint8_t bus_resp_dstid = core->bus_resp_dstid;
+    uint8_t bus_resp_valid = core->bus_resp_valid;
 
-    im_ready = 0;
-    ram_iport->apply(
-        core->im_addr,
-        im_rdata,
-        0,
-        0,
-        0,
-        core->im_valid,
-        im_ready
+    ram->apply(
+        core->bus_req_addr,
+        core->bus_req_wen,
+        core->bus_req_wdata,
+        core->bus_req_wmask,
+        core->bus_req_size,
+        core->bus_req_srcid,
+        core->bus_req_valid,
+        bus_req_ready,
+        bus_resp_rdata,
+        bus_resp_size,
+        bus_resp_dstid,
+        bus_resp_valid,
+        core->bus_resp_ready
     );
-
-    dm_ready = 0;
-    ram_dport->apply(
+    /*earliercon->apply(
         core->dm_addr,
         dm_rdata,
         core->dm_wdata,
@@ -85,24 +88,16 @@ void tick() {
         core->dm_wen,
         core->dm_valid,
         dm_ready
-    );
-    earliercon->apply(
-        core->dm_addr,
-        dm_rdata,
-        core->dm_wdata,
-        core->dm_wmask,
-        core->dm_wen,
-        core->dm_valid,
-        dm_ready
-    );
+    );*/
 
     core->clk = 1;
     core->eval();
 
-    core->im_rdata = im_rdata;
-    core->im_ready = im_ready;
-    core->dm_rdata = dm_rdata;
-    core->dm_ready = dm_ready;
+    core->bus_req_ready = bus_req_ready;
+    core->bus_resp_rdata = bus_resp_rdata;
+    core->bus_resp_size = bus_resp_size;
+    core->bus_resp_dstid = bus_resp_dstid;
+    core->bus_resp_valid = bus_resp_valid;
 
     // Let combinational changes propagate
     core->eval();
@@ -126,8 +121,7 @@ void reset() {
     tick();
     tick();
     core->rst = 0;
-    ram_dport->reset();
-    ram_iport->reset();
+    ram->reset();
 }
 
 int main(int argc, char *argv[]) {
@@ -137,8 +131,7 @@ int main(int argc, char *argv[]) {
     core = new Vrisu;
     Verilated::traceEverOn(true);
 
-    ram_dport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
-    ram_iport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
+    ram = new KLMemsim(RAM_BASE, RAM_SIZE);
     earliercon = new Earliercon(CON_BASE);
 
     for (int i = 1; i < argc; i++) {
@@ -162,8 +155,7 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
             else {
-                ram_dport->load_file(argv[i + 1]);
-                ram_iport->copy(ram_dport);
+                ram->load_file(argv[i + 1]);
             }
         }
         else if (strcmp(argv[i], "--cycles") == 0) {
@@ -176,7 +168,7 @@ int main(int argc, char *argv[]) {
                 max_cycles = atoi(argv[i + 1]);
             }
         }
-        else if (strcmp(argv[i], "--ilat") == 0) {
+        /*else if (strcmp(argv[i], "--ilat") == 0) {
             if (i == argc - 1) {
                 fprintf(stderr, "Error: no cycle number provided\n");
                 exit(1);
@@ -193,10 +185,9 @@ int main(int argc, char *argv[]) {
             else {
                 ram_dport->set_latency(atoi(argv[i + 1]));
             }
-        }
+        }*/
         else if (strcmp(argv[i], "--verbose") == 0) {
-            ram_dport->set_verbose(true);
-            ram_iport->set_verbose(true);
+            ram->set_verbose(true);
             verbose = true;
         }
     }
@@ -233,6 +224,7 @@ int main(int argc, char *argv[]) {
 
     time = clock() - time;
     time /= (CLOCKS_PER_SEC / 1000);
+    if (time == 0) time = 1;
 
     if (verbose) {
         printf("Simulation stopped after %ld cycles,\n"
@@ -258,8 +250,7 @@ int main(int argc, char *argv[]) {
         trace->close();
     }
 
-    delete ram_iport;
-    delete ram_dport;
+    delete ram;
     delete earliercon;
 
     return retval;

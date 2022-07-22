@@ -53,6 +53,6 @@ module fifo_1d_fwft (
     end
     assign b_valid = fifo_full || a_valid;
     assign b_data = fifo_full ? fifo : a_data;
-    assign a_ready = b_ready || !fifo_full;
+    assign a_ready = !fifo_full;
 
 endmodule

@@ -29,28 +29,29 @@ module l1cache(
     input  wire         rst,
     // Interface to CPU
     input  wire [31:0]  core_req_addr, // byte address
+    input  wire         core_req_wen,
     input  wire [63:0]  core_req_wdata,
-    output wire [63:0]  core_resp_rdata,
     input  wire [7:0]   core_req_wmask,
     output wire         core_req_ready,
     input  wire         core_req_valid,
+    output wire [63:0]  core_resp_rdata,
     output wire         core_resp_valid,
     // Interface to L2/ arbiter
-    output reg  [0:0]   mem_wl_a_opcode,
-    output wire [2:0]   mem_wl_a_size,
-    output reg  [31:0]  mem_wl_a_address,
-    output wire [7:0]   mem_wl_a_mask,
-    output wire [63:0]  mem_wl_a_data,
-    output reg          mem_wl_a_valid,
-    input  wire         mem_wl_a_ready,
-    input  wire [0:0]   mem_wl_d_opcode,
-    input  wire [63:0]  mem_wl_d_data,
-    input  wire         mem_wl_d_valid,
-    output reg          mem_wl_d_ready
+    output reg  [31:0]  mem_req_addr,
+    output reg          mem_req_wen,
+    output wire [63:0]  mem_req_wdata,
+    output wire [7:0]   mem_req_wmask,
+    output wire [2:0]   mem_req_size,
+    output reg          mem_req_valid,
+    input  wire         mem_req_ready,
+    input  wire [63:0]  mem_resp_rdata,
+    input  wire         mem_resp_valid,
+    output reg          mem_resp_ready
     );
 
     // Registered for 2nd-stage of pipeline
     reg [31:0]  p2_core_req_addr;
+    reg         p2_core_req_wen;
     reg [63:0]  p2_core_req_wdata;
     reg [7:0]   p2_core_req_wmask;
     reg         p2_core_req_valid;
@@ -196,7 +197,7 @@ module l1cache(
     wire [CACHE_LEN_TOTAL-1:0] cache_meta_flush_wb [0:CACHE_WAY-1];
 
     wire [CACHE_LINE_DBITS-1:0] cache_data_core_wb [0:CACHE_WAY-1];
-    wire [CACHE_LINE_DBITS-1:0] cache_data_mem_wb = mem_wl_d_data;
+    wire [CACHE_LINE_DBITS-1:0] cache_data_mem_wb = mem_resp_rdata;
 
     localparam CACHE_WB_CORE  = 2'd0;
     localparam CACHE_WB_MEM   = 2'd1;
@@ -211,7 +212,7 @@ module l1cache(
                 p2_cache_meta_rd[i][BIT_TAG_END:BIT_TAG_START];
         assign cache_meta_core_wb[i][BIT_VALID] = 1'b1;
         assign cache_meta_core_wb[i][BIT_DIRTY] =
-                ((p2_core_req_wmask != 0) || (p2_cache_meta_rd[i][BIT_DIRTY]));
+                ((p2_core_req_wen) || (p2_cache_meta_rd[i][BIT_DIRTY]));
         assign cache_meta_core_wb[i][BIT_LRU] = cache_way_updated_lru[i];
 
         // Write-back value for read/ write miss
@@ -254,7 +255,7 @@ module l1cache(
                 (p2_cache_comparator[i] && p2_core_req_valid) :
                 (cache_meta_we_reg[i]);
         assign p2_cache_data_we[i] = cache_int_ready ?
-                (p2_cache_comparator[i] && p2_core_req_valid) :
+                (p2_cache_comparator[i] && p2_core_req_valid && p2_core_req_wen) :
                 (cache_data_we_reg[i]);
     end
     endgenerate
@@ -310,7 +311,7 @@ module l1cache(
     always@(posedge clk) begin
         if (rst) begin
             cache_state <= STATE_RESET;
-            mem_wl_d_ready <= 1'b0;
+            mem_resp_ready <= 1'b0;
             cache_meta_we_reg[0] <= 1'b0;
             cache_meta_we_reg[1] <= 1'b0;
             cache_data_we_reg[0] <= 1'b0;
@@ -337,6 +338,7 @@ module l1cache(
                 cache_meta_we_reg[1] <= 1'b0;
                 cache_way_wb_src <= CACHE_WB_CORE;
                 p2_core_req_addr <= core_req_addr;
+                p2_core_req_wen <= core_req_wen;
                 p2_core_req_wdata <= core_req_wdata;
                 p2_core_req_wmask <= core_req_wmask;
                 p2_core_req_valid <= core_req_valid;
@@ -363,10 +365,10 @@ module l1cache(
                         // flush is not required
                         reload_counter <= 0;
                         // Issue Reload request
-                        mem_wl_a_opcode <= `WL_Get;
-                        mem_wl_a_address <= cache_load_mem_addr;
-                        mem_wl_a_valid <= 1'b1;
-                        mem_wl_d_ready <= 1'b1;
+                        mem_req_wen <= 1'b0;
+                        mem_req_addr <= cache_load_mem_addr;
+                        mem_req_valid <= 1'b1;
+                        mem_resp_ready <= 1'b1;
                         cache_way_wb_src <= CACHE_WB_MEM;
                         cache_state <= STATE_LOAD;
                         cache_data_we_reg[cache_victim] <= 1'b1;
@@ -375,36 +377,36 @@ module l1cache(
                 end
                 else begin
                     p2_core_req_addr <= core_req_addr;
+                    p2_core_req_wen <= core_req_wen;
                     p2_core_req_wdata <= core_req_wdata;
                     p2_core_req_wmask <= core_req_wmask;
                     p2_core_req_valid <= core_req_valid;
                 end
             end
             STATE_FLUSH: begin
-                mem_wl_a_opcode <= `WL_Put;
-                mem_wl_a_address <= cache_flush_mem_addr;
-                mem_wl_a_valid <= 1'b1;
-                if (mem_wl_a_ready) begin
+                mem_req_wen <= `WL_Put;
+                mem_req_addr <= cache_flush_mem_addr;
+                mem_req_valid <= 1'b1;
+                if (mem_req_ready) begin
                     // Data in last beat has been accepted, continue to next beat
                     reload_counter <= reload_counter + 1;
                     if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
                         // Writeback finished, waiting for acknowledge from L2
                         cache_state <= STATE_FLUSH_WAIT_ACK;
-                        mem_wl_d_ready <= 1'b1;
+                        mem_resp_ready <= 1'b1;
                     end
                 end
             end
             STATE_FLUSH_WAIT_ACK: begin
-                mem_wl_a_valid <= 1'b0;
-                if (mem_wl_d_valid &&
-                        (mem_wl_d_opcode == `WL_AccessAck)) begin
-                    mem_wl_d_ready <= 1'b0;
+                mem_req_valid <= 1'b0;
+                if (mem_resp_valid) begin
+                    mem_resp_ready <= 1'b0;
                     reload_counter <= 0;
                     // Issue Reload request
-                    mem_wl_a_opcode <= `WL_Get;
-                    mem_wl_a_address <= cache_load_mem_addr;
-                    mem_wl_a_valid <= 1'b1;
-                    mem_wl_d_ready <= 1'b1;
+                    mem_req_wen <= 1'b0;
+                    mem_req_addr <= cache_load_mem_addr;
+                    mem_req_valid <= 1'b1;
+                    mem_resp_ready <= 1'b1;
                     cache_way_wb_src <= CACHE_WB_MEM;
                     cache_data_we_reg[cache_victim] <= 1'b1;
                     cache_state <= STATE_LOAD;
@@ -412,15 +414,14 @@ module l1cache(
             end
             STATE_LOAD: begin
                 // Ack the A channel request if accepted
-                if (mem_wl_a_ready) begin
-                    mem_wl_a_valid <= 1'b0;
+                if (mem_req_ready) begin
+                    mem_req_valid <= 1'b0;
                 end
                 // Writeback way data if got a beat from L2
-                if (mem_wl_d_valid &&
-                        (mem_wl_d_opcode == `WL_AccessDat)) begin
+                if (mem_resp_valid) begin
                     reload_counter <= reload_counter + 1;
                     if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
-                        mem_wl_d_ready <= 1'b0;
+                        mem_resp_ready <= 1'b0;
                         cache_state <= STATE_WAY_WB;
                         cache_meta_we_reg[cache_victim] <= 1'b1;
                         cache_data_we_reg[cache_victim] <= 1'b0;
@@ -443,6 +444,7 @@ module l1cache(
                 // Essentially same as STATE_PREPARE, but consider output as
                 // valid
                 p2_core_req_addr <= core_req_addr;
+                p2_core_req_wen <= core_req_wen;
                 p2_core_req_wdata <= core_req_wdata;
                 p2_core_req_wmask <= core_req_wmask;
                 p2_core_req_valid <= core_req_valid;
@@ -453,8 +455,8 @@ module l1cache(
     end
     
     // Tieoff fixed outputs
-    assign mem_wl_a_size = 3'd5; // 2^5 = 32 byte / 4 beats on 64-bit bus
-    assign mem_wl_a_mask = 8'hFF;
-    assign mem_wl_a_data = p2_cache_data_rd[cache_victim];
+    assign mem_req_size = 3'd5; // 2^5 = 32 byte / 4 beats on 64-bit bus
+    assign mem_req_wmask = 8'hFF;
+    assign mem_req_wdata = p2_cache_data_rd[cache_victim];
 
 endmodule

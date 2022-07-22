@@ -83,6 +83,6 @@ module fifo_2d_fwft (
     end
     assign b_valid = !fifo_empty || a_valid;
     assign b_data = fifo_empty ? a_data : fifo_top;
-    assign a_ready = b_ready || !fifo_full;
+    assign a_ready = !fifo_full;
 
 endmodule

@@ -37,6 +37,7 @@ CSRCS +=
 CPPSRCS += \
 	./main.cpp \
 	./earliercon.cpp \
+	./klmemsim.cpp \
 	./memsim.cpp \
 	verilated.cpp \
 	verilated_vcd_c.cpp

@@ -107,7 +107,12 @@ module l1cache(
 
     // 1st pipeline stage
     wire [CACHE_ADDR_BITS-1:0] core_dw_addr = core_req_addr[31:3];
-    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr = core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
+    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr =
+            core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
+    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr_keep =
+            p2_core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
+    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr_mux = (cache_int_ready) ?
+            cache_meta_raddr : cache_meta_raddr_keep;
 
     wire p2_cache_comparator [0:CACHE_WAY-1];
 
@@ -127,7 +132,7 @@ module l1cache(
         ram_256_32 cache_meta(
             .clk(clk),
             .rst(rst),
-            .raddr(cache_meta_raddr),
+            .raddr(cache_meta_raddr_mux),
         // 2nd pipeline stage (after 1-cycle RAM)
             // Read has 1 cycle delay
             .rd(meta_sram_rd[i]),
@@ -136,6 +141,16 @@ module l1cache(
             .we(p2_cache_meta_we[i]),
             .wr({10'b0, p2_cache_meta_wr[i]})
         );
+
+        always @(posedge clk) begin
+            if (p2_cache_meta_we[i]) begin
+                $display("Cache way %d line %02x refill valid %d dirty %d tag %019x", i,
+                        p2_cache_meta_waddr_mux,
+                        p2_cache_meta_wr[i][BIT_VALID],
+                        p2_cache_meta_wr[i][BIT_DIRTY],
+                        p2_cache_meta_wr[i][BIT_TAG_END:BIT_TAG_START]);
+            end
+        end
 
         assign p2_cache_meta_rd[i] = meta_sram_rd[i][CACHE_LEN_TOTAL-1:0];
 
@@ -384,7 +399,7 @@ module l1cache(
                 end
             end
             STATE_FLUSH: begin
-                mem_req_wen <= `WL_Put;
+                mem_req_wen <= 1'b1;
                 mem_req_addr <= cache_flush_mem_addr;
                 mem_req_valid <= 1'b1;
                 if (mem_req_ready) begin

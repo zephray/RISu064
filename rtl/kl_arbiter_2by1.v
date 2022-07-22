@@ -29,7 +29,7 @@ module kl_arbiter_2by1(
     input  wire         clk,
     input  wire         rst,
     // Uplink
-    input  wire [47:0]  up0_req_addr,
+    input  wire [31:0]  up0_req_addr,
     input  wire         up0_req_wen,
     input  wire [63:0]  up0_req_wdata,
     input  wire [7:0]   up0_req_wmask,
@@ -39,7 +39,7 @@ module kl_arbiter_2by1(
     output reg  [63:0]  up0_resp_rdata,
     output reg          up0_resp_valid,
     input  wire         up0_resp_ready,
-    input  wire [47:0]  up1_req_addr,
+    input  wire [31:0]  up1_req_addr,
     input  wire         up1_req_wen,
     input  wire [63:0]  up1_req_wdata,
     input  wire [7:0]   up1_req_wmask,
@@ -50,7 +50,7 @@ module kl_arbiter_2by1(
     output reg          up1_resp_valid,
     input  wire         up1_resp_ready,
     // Downlink
-    output reg  [47:0]  dn_req_addr,
+    output reg  [31:0]  dn_req_addr,
     output reg          dn_req_wen,
     output reg  [63:0]  dn_req_wdata,
     output reg  [7:0]   dn_req_wmask,
@@ -144,7 +144,7 @@ module kl_arbiter_2by1(
     wire [1:0] arb_resp_grant_id = (dn_resp_dstid == UP0_SRC_ID) ? ARB_UP0 :
                     ((dn_resp_dstid == UP1_SRC_ID) ? ARB_UP1 : ARB_NONE);
     wire [1:0] arb_resp_conn = (arb_resp_conn_reg == ARB_NONE) ?
-            ((dn_resp_valid) ? arb_resp_grant_id : ARB_NONE) : arb_req_conn_reg;
+            ((dn_resp_valid) ? arb_resp_grant_id : ARB_NONE) : arb_resp_conn_reg;
     reg [1:0] arb_resp_state;
     reg [MAX_BURST_WIDTH-1:0] resp_burst_counter;
     wire [MAX_BURST_WIDTH-1:0] resp_burst_counter_dec = resp_burst_counter - 1;
@@ -165,7 +165,7 @@ module kl_arbiter_2by1(
                 end
                 // Process request
                 if (dn_resp_ready && dn_resp_valid) begin
-                    resp_burst_counter <= resp_burst_size;
+                    resp_burst_counter <= resp_burst_size - 1;
                     if (resp_burst_size > 1) begin
                         arb_resp_state <= ARB_WAIT_FOR_BURST;
                     end
@@ -196,7 +196,7 @@ module kl_arbiter_2by1(
         up1_req_ready = 1'b0;
         up1_resp_rdata = 64'bx;
         up1_resp_valid = 1'b0;
-        dn_req_addr = 48'bx;
+        dn_req_addr = 32'bx;
         dn_req_wen = 1'bx;
         dn_req_wdata = 64'bx;
         dn_req_wmask = 8'bx;

@@ -73,7 +73,6 @@ void KLMemsim::write(uint64_t addr, uint64_t data, uint8_t mask) {
 int KLMemsim::get_beats(uint8_t size) {
     int byte_size = (1l << size);
     int beats = (byte_size + 7) / 8;
-    printf("Byte size %d bytes, %d beats\n", byte_size, beats);
     return beats;
 }
 
@@ -182,7 +181,7 @@ void KLMemsim::apply(uint32_t req_addr, uint8_t req_wen, uint64_t req_wdata,
                     resp_rdata = read(cur_addr);
                     if (verbose)
                         fprintf(stderr, "MEM: RD addr %08lx beat %d = %016lx...\n",
-                            cur_addr, cur_beatcount, resp_rdata);
+                            cur_addr, cur_beatcount - 2, resp_rdata);
                     cur_beatcount--;
                     cur_addr += 8;
                 }

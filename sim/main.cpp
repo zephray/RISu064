@@ -27,8 +27,8 @@
 
 #include "verilated.h"
 #include "verilated_vcd_c.h"
-#include "Vrisu.h"
-#include "Vrisu___024root.h"
+#include "Vsimtop.h"
+#include "Vsimtop___024root.h"
 
 #include "klmemsim.h"
 #include "earliercon.h"
@@ -39,7 +39,7 @@
 #define CON_BASE 0x20000000
 
 // Verilator related
-Vrisu *core;
+Vsimtop *core;
 VerilatedVcdC *trace;
 uint64_t tickcount;
 
@@ -52,6 +52,9 @@ uint64_t max_cycles;
 KLMemsim *ram;
 Earliercon *earliercon;
 
+#define CONCAT(a,b) a##b
+#define SIGNAL(x) CONCAT(core->rootp->simtop__DOT__asictop__DOT__risu__DOT__cpu__DOT__,x)
+
 void tick() {
     // Software simulated parts should read the signal
     // before clock edge (simulate the combinational
@@ -61,6 +64,7 @@ void tick() {
     // Note: accessing not mapped address causes deadlock
     uint8_t bus_req_ready = core->bus_req_ready;
     uint64_t bus_resp_rdata = core->bus_resp_rdata;
+    uint8_t bus_resp_ren = core->bus_resp_ren;
     uint8_t bus_resp_size = core->bus_resp_size;
     uint8_t bus_resp_dstid = core->bus_resp_dstid;
     uint8_t bus_resp_valid = core->bus_resp_valid;
@@ -75,6 +79,7 @@ void tick() {
         core->bus_req_valid,
         bus_req_ready,
         bus_resp_rdata,
+        bus_resp_ren,
         bus_resp_size,
         bus_resp_dstid,
         bus_resp_valid,
@@ -95,6 +100,7 @@ void tick() {
 
     core->bus_req_ready = bus_req_ready;
     core->bus_resp_rdata = bus_resp_rdata;
+    core->bus_resp_ren = bus_resp_ren;
     core->bus_resp_size = bus_resp_size;
     core->bus_resp_dstid = bus_resp_dstid;
     core->bus_resp_valid = bus_resp_valid;
@@ -128,7 +134,7 @@ int main(int argc, char *argv[]) {
     // Initialize testbench
     Verilated::commandArgs(argc, argv);
 
-    core = new Vrisu;
+    core = new Vsimtop;
     Verilated::traceEverOn(true);
 
     ram = new KLMemsim(RAM_BASE, RAM_SIZE);
@@ -214,8 +220,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        if (!core->rootp->risu__DOT__cpu__DOT__dec_ix_legal &&
-                core->rootp->risu__DOT__cpu__DOT__dec_ix_valid) {
+        if (!SIGNAL(dec_ix_legal) && SIGNAL(dec_ix_valid)) {
             if (verbose)
                 printf("Encountered illegal instruction\n");
             break;
@@ -231,13 +236,13 @@ int main(int argc, char *argv[]) {
                 "average simulation speed: %ld kHz.\n",
                 tickcount, tickcount / time);
         for (int i = 0; i < 31; i++) {
-            printf("R%d = %016lx\n", i + 1, core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[i]);
+            printf("R%d = %016lx\n", i + 1, SIGNAL(rf__DOT__rf_array[i]));
         }
     }
 
     int retval;
-    if ((core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[9] == 0) &&
-            (core->rootp->risu__DOT__cpu__DOT__rf__DOT__rf_array[16] == 93)) {
+    if ((SIGNAL(rf__DOT__rf_array[9]) == 0) &&
+            (SIGNAL(rf__DOT__rf_array[16]) == 93)) {
         printf("Test passed\n");
         retval = 0;
     }

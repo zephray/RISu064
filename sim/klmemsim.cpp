@@ -89,8 +89,8 @@ uint64_t KLMemsim::get_bitmask(uint8_t mask) {
 void KLMemsim::apply(uint32_t req_addr, uint8_t req_wen, uint64_t req_wdata,
             uint8_t req_wmask, uint8_t req_size, uint8_t req_srcid,
             uint8_t req_valid, uint8_t &req_ready, uint64_t &resp_rdata,
-            uint8_t &resp_size, uint8_t &resp_dstid, uint8_t &resp_valid,
-            uint8_t resp_ready) {
+            uint8_t &resp_ren, uint8_t &resp_size, uint8_t &resp_dstid,
+            uint8_t &resp_valid, uint8_t resp_ready) {
     // Called during every posedge clk
     // Default values
     resp_valid = 0;
@@ -139,6 +139,7 @@ void KLMemsim::apply(uint32_t req_addr, uint8_t req_wen, uint64_t req_wdata,
                     resp_valid = 1;
                     resp_dstid = cur_id;
                     resp_size = cur_size;
+                    resp_ren = 0;
                     resp_rdata = 0;
                     if (!resp_ready) {
                         // Ack not accepted, need to wait more cycles
@@ -178,6 +179,7 @@ void KLMemsim::apply(uint32_t req_addr, uint8_t req_wen, uint64_t req_wdata,
                     resp_dstid = cur_id;
                     resp_size = cur_size;
                     resp_valid = 1;
+                    resp_ren = 1;
                     resp_rdata = read(cur_addr);
                     if (verbose)
                         fprintf(stderr, "MEM: RD addr %08lx beat %d = %016lx...\n",

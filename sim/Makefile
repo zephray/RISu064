@@ -8,7 +8,7 @@ endif
 VROOT := $(VERILATOR_ROOT)
 VINCD := $(VROOT)/include
 RTLOBJDIR := $(RTLDIR)/obj_dir
-RTLOBJ := $(RTLOBJDIR)/Vrisu__ALL.a
+RTLOBJ := $(RTLOBJDIR)/Vsimtop__ALL.a
 
 CC = g++
 CXX = g++

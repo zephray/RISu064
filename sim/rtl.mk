@@ -8,7 +8,9 @@
 ##   Use Xilinx ISE or Quartus for FPGA build.
 ################################################################################
 
-all: risu
+TARGET = simtop
+
+all: $(TARGET)
 
 VOBJ := obj_dir
 CXX   := g++
@@ -17,7 +19,7 @@ CPUS ?= $(shell bash -c 'nproc --all')
 VERBOSE ?= 0
 
 .PHONY: all
-risu: $(VOBJ)/Vrisu__ALL.a
+$(TARGET): $(VOBJ)/V$(TARGET)__ALL.a
 
 SUBMAKE := $(MAKE) --no-print-directory --directory=$(VOBJ) -f
 ifeq ($(VERILATOR_ROOT),)
@@ -30,8 +32,8 @@ ifeq ($(VERBOSE), 1)
 VFLAGS += +define+VERBOSE=1
 endif
 
-$(VOBJ)/Vrisu__ALL.a: $(VOBJ)/Vrisu.cpp $(VOBJ)/Vrisu.h
-$(VOBJ)/Vrisu__ALL.a: $(VOBJ)/Vrisu.mk
+$(VOBJ)/V$(TARGET)__ALL.a: $(VOBJ)/V$(TARGET).cpp $(VOBJ)/V$(TARGET).h
+$(VOBJ)/V$(TARGET)__ALL.a: $(VOBJ)/V$(TARGET).mk
 
 $(VOBJ)/V%.cpp $(VOBJ)/V%.h $(VOBJ)/V%.mk: $(FBDIR)/%.v
 	$(VERILATOR) $(VFLAGS) $*.v

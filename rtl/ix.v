@@ -195,6 +195,15 @@ module ix(
         end
     endgenerate
 
+    // WAW hazard
+    // TODO: If WB is accepted this cycle, then it's not a hazard
+    wire dst_ready = (!dec_ix_wb_en) ||
+            ((!ip_wb_active || (ip_wb_dst != dec_ix_rd)) &&
+            (!ip_ex_active || (ix_ip_dst != dec_ix_rd)) &&
+            (!ip_ex_ixstalled || (ix_ip_dst != dec_ix_rd)) &&
+            (!lsp_wb_active || (lsp_wb_dst != dec_ix_rd)) &&
+            (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec_ix_rd)) &&
+            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd)));
 
     wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
     wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
@@ -210,7 +219,7 @@ module ix(
     wire [63:0] br_base = (dec_ix_br_base_src == `BB_PC) ? (dec_ix_pc) :
             (rs_val[0]);
 
-    wire ix_opr_ready = operand1_ready && operand2_ready;
+    wire ix_opr_ready = operand1_ready && operand2_ready && dst_ready;
     wire ix_issue_ip0 = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
             (ix_ip_ready) && !pipe_flush;

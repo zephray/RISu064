@@ -173,7 +173,9 @@ module lsp(
     reg m_wb_mem_sign;
     reg [1:0] m_wb_mem_width;
     always @(posedge clk) begin
-        m_wb_req_valid <= dm_req_valid && dm_req_ready;
+        if (!lsp_stalled_memory_resp) begin
+            m_wb_req_valid <= dm_req_valid && dm_req_ready;
+        end
         if (!lsp_stalled) begin
             m_wb_pc <= ag_m_pc;
             m_wb_dst <= ag_m_dst;

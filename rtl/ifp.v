@@ -77,7 +77,7 @@ module ifp(
         /* verilator lint_on PINCONNECTEMPTY */
         .b_data(ifp_new_pc),
         .b_valid(ifp_pc_override),
-        .b_ready(!(ifp_stalled || ifp_stalled_last))
+        .b_ready(!(ifp_stalled || ifp_stalled_last || ifp_memreq_nack))
     );
 
     assign next_pc =

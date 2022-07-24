@@ -65,14 +65,42 @@ module kl2ml_bridge(
     assign ml_clk = clk_div;
     assign ml_clkn = ~clk_div;
 
-    // TODO: Aligned access + wmask to mask-less conversion
+    // Aligned access + wmask to mask-less conversion
+    // ml: maskless
+    reg [2:0] ml_req_size;
+    reg [31:0] ml_req_addr;
+    integer i;
+    always @(*) begin
+        // If things are aligned...
+        ml_req_size = kl_req_size;
+        ml_req_addr = kl_req_addr;
+        for (i = 0; i < 8; i = i + 1) begin
+            if (kl_req_wmask == (8'd1 << i)) begin
+                ml_req_size = 0; // byte
+                ml_req_addr[2:0] = i[2:0];
+            end
+        end
+        for (i = 0; i < 8; i = i + 2) begin
+            if (kl_req_wmask == (8'd3 << i)) begin
+                ml_req_size = 1; // half
+                ml_req_addr[2:0] = i[2:0];
+            end
+        end
+        for (i = 0; i < 8; i = i + 4) begin
+            if (kl_req_wmask == (8'd15 << i)) begin
+                ml_req_size = 2; // word
+                ml_req_addr[2:0] = i[2:0];
+            end
+        end
+    end
+
     ml_xcvr #(.INITIAL_ROLE(0)) ml_xcvr (
         .clk(clk),
         .rst(rst),
-        .kl_tx_addr(kl_req_addr),
+        .kl_tx_addr(ml_req_addr),
         .kl_tx_den(kl_req_wen),
         .kl_tx_data(kl_req_wdata),
-        .kl_tx_size(kl_req_size),
+        .kl_tx_size(ml_req_size),
         .kl_tx_id(kl_req_srcid),
         .kl_tx_valid(kl_req_valid),
         .kl_tx_ready(kl_req_ready),

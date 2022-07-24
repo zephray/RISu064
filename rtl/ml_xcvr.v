@@ -55,18 +55,18 @@ module ml_xcvr(
     parameter INITIAL_ROLE = 0;
     parameter MAX_BURST_WIDTH = 4; // Up to 2^4=16 64-bit cycle burst
 
-    localparam ST_IDLE = 4'd0;
-    localparam ST_TX_CLAMING_BUS = 4'd1;
-    localparam ST_TX_INITDATA = 4'd2;
-    localparam ST_TX_BURST = 4'd3;
-    localparam ST_TX_FINALIZE= 4'd4;
-    localparam ST_RX_HEADER = 4'd5;
-    localparam ST_RX_HEADERWAIT = 4'd6;
-    localparam ST_RX_BURST = 4'd7;
+    localparam ST_IDLE = 3'd0;
+    localparam ST_TX_CLAMING_BUS = 3'd1;
+    localparam ST_TX_INITDATA = 3'd2;
+    localparam ST_TX_BURST = 3'd3;
+    localparam ST_TX_FINALIZE= 3'd4;
+    localparam ST_RX_HEADER = 3'd5;
+    localparam ST_RX_HEADERWAIT = 3'd6;
+    localparam ST_RX_BURST = 3'd7;
     
     reg ml_txbr_reg;
 
-    reg [3:0] state;
+    reg [2:0] state;
     reg last_ba; // Previous bus arbitration: 0-other 1-self
     reg [MAX_BURST_WIDTH-1:0] burst_counter;
     wire [MAX_BURST_WIDTH-1:0] burst_counter_dec = burst_counter - 1;
@@ -156,9 +156,21 @@ module ml_xcvr(
             ml_txbr_reg <= 1'b0;
             tx_pending <= 1'b0;
             if (tx_pending) begin
-                state <= ST_TX_CLAMING_BUS;
-                ml_txbr_reg <= 1'b1;
-                kl_tx_ready_reg <= 1'b0;
+                if (ml_rxbr) begin
+                    // Other side has already claimed the bus, fail
+                    // But state is still in IDLE, so this must be the first
+                    // cycle otherside trying to claim the bus
+                    state <= ST_RX_HEADER;
+                    kl_tx_ready_reg <= 1'b0;
+                    tx_pending <= 1'b1;
+                    ml_data_ie <= 1'b1;
+                    last_ba <= 1'b0;
+                end
+                else begin
+                    state <= ST_TX_CLAMING_BUS;
+                    ml_txbr_reg <= 1'b1;
+                    kl_tx_ready_reg <= 1'b0;
+                end
             end
             else if (kl_tx_ready && kl_tx_valid) begin
                 // Accept the request
@@ -187,6 +199,7 @@ module ml_xcvr(
             else if (ml_rxbr) begin
                 // Other side is trying to claim the bus, nothing to send
                 // Grant
+                kl_tx_ready_reg <= 1'b0;
                 state <= ST_RX_HEADER;
                 ml_data_ie <= 1'b1;
                 last_ba <= 1'b0;
@@ -262,7 +275,7 @@ module ml_xcvr(
                     kl_rx_den <= 1'b1;
                     kl_rx_valid_reg <= 1'b0;
                     state <= ST_RX_BURST;
-                    burst_counter <= rx_burst_size;
+                    burst_counter <= (rx_burst_size == 0) ? 1 : rx_burst_size;
                 end
             end
         end

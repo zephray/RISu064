@@ -29,11 +29,11 @@ module ml2kl_bridge(
     input  wire         clk,
     input  wire         rst,
     // KLink A side
-    output wire [31:0]  kl_req_addr,
+    output reg  [31:0]  kl_req_addr,
     output wire         kl_req_wen,
     output wire [63:0]  kl_req_wdata,
-    output wire [7:0]   kl_req_wmask,
-    output wire [2:0]   kl_req_size,
+    output reg  [7:0]   kl_req_wmask,
+    output reg  [2:0]   kl_req_size,
     output wire [4:0]   kl_req_srcid,
     output wire         kl_req_valid,
     input  wire         kl_req_ready,
@@ -52,7 +52,37 @@ module ml2kl_bridge(
     output wire         ml_data_ie
 );
 
-    // TODO: Mask-less to aligned access + wmask conversion
+    // Mask-less to aligned access + wmask conversion
+    wire [2:0] ml_req_size;
+    wire [31:0] ml_req_addr;
+    integer i;
+    always @(*) begin
+        kl_req_size = (ml_req_size < 3'd3) ? 3'd3 : ml_req_size;
+        kl_req_addr = {ml_req_addr[31:3], 3'b0};
+        kl_req_wmask = 8'hff;
+        if (ml_req_size == 0) begin
+            // Byte access
+            for (i = 0; i < 8; i = i + 1) begin
+                if (ml_req_addr[2:0] == i[2:0])
+                    kl_req_wmask = (8'd1 << i);
+            end
+        end
+        else if (ml_req_size == 1) begin
+            // Half access
+            for (i = 0; i < 8; i = i + 2) begin
+                if (ml_req_addr[2:0] == i[2:0])
+                    kl_req_wmask = (8'd3 << i);
+            end
+        end
+        else if (ml_req_size == 2) begin
+            // Word access
+            for (i = 0; i < 8; i = i + 4) begin
+                if (ml_req_addr[2:0] == i[2:0])
+                    kl_req_wmask = (8'd15 << i);
+            end
+        end
+    end
+    
     ml_xcvr #(.INITIAL_ROLE(1)) ml_xcvr (
         .clk(clk),
         .rst(rst),
@@ -63,10 +93,10 @@ module ml2kl_bridge(
         .kl_tx_id(kl_resp_dstid),
         .kl_tx_valid(kl_resp_valid),
         .kl_tx_ready(kl_resp_ready),
-        .kl_rx_addr(kl_req_addr),
+        .kl_rx_addr(ml_req_addr),
         .kl_rx_data(kl_req_wdata),
         .kl_rx_den(kl_req_wen),
-        .kl_rx_size(kl_req_size),
+        .kl_rx_size(ml_req_size),
         .kl_rx_id(kl_req_srcid),
         .kl_rx_valid(kl_req_valid),
         .kl_rx_ready(kl_req_ready),
@@ -77,7 +107,5 @@ module ml2kl_bridge(
         .ml_data_oe(ml_data_oe),
         .ml_data_ie(ml_data_ie)
     );
-
-    assign kl_req_wmask = 8'hff;
 
 endmodule

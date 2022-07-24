@@ -52,12 +52,20 @@ uint64_t KLMemsim::read(uint64_t addr) {
     // Unaligned access is legal
     addr -= base;
     addr >>= 3;
+    if (addr >= (size / 8)) {
+        fprintf(stderr, "MEMORY READ OUT OF BOUND\n");
+        return 0;
+    }
     return mem[addr];
 }
 
 void KLMemsim::write(uint64_t addr, uint64_t data, uint8_t mask) {
     addr -= base;
     addr >>= 3;
+    if (addr >= (size / 8)) {
+        fprintf(stderr, "MEMORY WRITE OUT OF BOUND\n");
+        return;
+    }
     if (mask == 0xff) {
         mem[addr] = data;
     }

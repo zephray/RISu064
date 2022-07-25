@@ -100,7 +100,7 @@
 `define OT_STORE        3'd3
 `define OT_FENCE        3'd4
 `define OT_MUL          3'd5
-`define OT_CSR          3'd6
+`define OT_TRAP         3'd6
 `define OT_FP           3'd7
 
 // Destination availability
@@ -132,3 +132,90 @@
 `define CSR_RW          2'd1
 `define CSR_RS          2'd2
 `define CSR_RC          2'd3
+
+// Supported CSRs
+`define CSR_CYCLE       12'hc00
+`define CSR_TIME        12'hc01
+`define CSR_INSTRET     12'hc02
+`define CSR_MVENDORID   12'hf11
+`define CSR_MARCHID     12'hf12
+`define CSR_MIMPID      12'hf13
+`define CSR_MHARTID     12'hf14
+`define CSR_MSTATUS     12'h300
+`define CSR_MISA        12'h301
+`define CSR_MIE         12'h304
+`define CSR_MTVEC       12'h305
+`define CSR_MSCRATCH    12'h340
+`define CSR_MEPC        12'h341
+`define CSR_MCAUSE      12'h342
+`define CSR_MIP         12'h344
+`define CSR_MCYCLE      12'hb00
+`define CSR_MINSTRET    12'hb02
+
+// MCAUSE
+// MSB
+`define MCAUSE_INTERRUPT    1'b0
+`define MCAUSE_EXCEPTION    1'b1
+// Exclude MSB
+// Interrupt
+`define MCAUSE_SSI          4'd1
+`define MCAUSE_MSI          4'd3
+`define MCAUSE_STI          4'd5
+`define MCAUSE_MTI          4'd7
+`define MCAUSE_SEI          4'd9
+`define MCAUSE_MEI          4'd11
+// Exception
+`define MCAUSE_IMISALGN     4'd0
+`define MCAUSE_IACFAULT     4'd1
+`define MCAUSE_ILLEGALI     4'd2
+`define MCAUSE_BRKPOINT     4'd3
+`define MCAUSE_LMISALGN     4'd4
+`define MCAUSE_LACFAULT     4'd5
+`define MCAUSE_SMISALGN     4'd6
+`define MCAUSE_SACFAULT     4'd7
+`define MCAUSE_ECALLUM      4'd8
+`define MCAUSE_ECALLSM      4'd9
+`define MCAUSE_ECALLMM      4'd11
+`define MCAUSE_IPGFAULT     4'd12
+`define MCAUSE_LPGFAULT     4'd13
+`define MCAUSE_SPGFAULT     4'd15
+
+`define MIE_MSI             `MCAUSE_MSI
+`define MIE_MTI             `MCAUSE_MTI
+`define MIE_MEI             `MCAUSE_MEI
+
+// MISA
+`define MISA_XLEN_32        64'd1
+`define MISA_XLEN_64        64'd2
+`define MISA_XLEN_128       64'd3
+`define MISA_EXT_ATOMIC     (64'b1 << 0)
+`define MISA_EXT_COMPRESS   (64'b1 << 2)
+`define MISA_EXT_DOUBLE     (64'b1 << 3)
+`define MISA_EXT_EBASE      (64'b1 << 4)
+`define MISA_EXT_FLOAT      (64'b1 << 5)
+`define MISA_EXT_IBASE      (64'b1 << 8)
+`define MISA_EXT_MULDIV     (64'b1 << 12)
+`define MISA_EXT_SUPERVISOR (64'b1 << 18)
+`define MISA_EXT_USER       (64'b1 << 20)
+`define MISA_EXT_VECTOR     (64'b1 << 21)
+`define MISA_EXT_XNONSTD    (64'b1 << 23)
+`define MISA_VAL            ((`MISA_XLEN_64 << 62) | `MISA_EXT_IBASE)
+
+// MVENDOR
+`define MVENDORID           64'b0
+
+// MARCHID
+`define MARCHID             64'd30 // TODO: Register this!
+
+// MIMPID
+`define MIMPID              64'd1
+
+// MHARTID is set as an parameter
+
+// MSTATUS
+`define MSTATUS_MPIE_BIT    7
+`define MSTATUS_MIE_BIT     3
+
+// MTVEC
+`define MTVEC_MODE_DIRECT   2'd0
+`define MTVEC_MODE_VECTORED 2'd1

@@ -49,6 +49,7 @@ module asictop(
     wire [4:0]  bus_resp_dstid;
     wire        bus_resp_valid;
     wire        bus_resp_ready;
+    wire        ext_interrupt; // TODO: Do something about this
 
     // CPU core
     risu risu(
@@ -66,8 +67,11 @@ module asictop(
         .bus_resp_size(bus_resp_size),
         .bus_resp_dstid(bus_resp_dstid),
         .bus_resp_valid(bus_resp_valid),
-        .bus_resp_ready(bus_resp_ready)
+        .bus_resp_ready(bus_resp_ready),
+        .ext_interrupt(ext_interrupt)
     );
+
+    assign ext_interrupt = 1'b0;
 
     // External bus bridge
     kl2ml_bridge kl2ml_bridge(

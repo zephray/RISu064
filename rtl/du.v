@@ -40,6 +40,9 @@ module du(
     output reg [1:0] mem_width,
     // Decoder output specific for CSR pipe
     output reg [1:0] csr_op,
+    output reg mret,
+    output reg intr,
+    output reg [3:0] cause,
     // Decoder common output
     output reg [2:0] op_type,
     output reg [1:0] operand1,
@@ -82,6 +85,10 @@ module du(
         br_neg = 1'bx;
         br_base_src = 1'bx;
         br_inj_pc = 1'b0;
+        csr_op = 2'bx;
+        mret = 1'bx;
+        intr = 1'bx;
+        cause = 4'bx;
         op_type = 3'bx;
         operand1 = 2'bx;
         operand2 = 2'bx;
@@ -294,6 +301,7 @@ module du(
                 legal = 1'b1;
             end
             else if (instr[31:7] == 25'b0000000000000000000100000) begin
+                // Zifencei
                 fencei = 1'b1;
                 legal = 1'b1;
             end
@@ -301,27 +309,49 @@ module du(
                 legal = 1'b0;
             end
         end
-        // CSR pipe instructions
-        /*`OP_ENVCSR: begin
-            op_type = `OT_CSR;
+        // Trap pipe instructions
+        `OP_ENVCSR: begin
+            op_type = `OT_TRAP;
+            legal = 1'b1;
             if (funct3 == 3'b000) begin
-                // environment instructions, raise illegal instruction for now
-                legal = 1'b0;
+                if (instr[31:7] == 25'b0000000000010000000000000) begin
+                    // ebreak
+                    cause = `MCAUSE_BRKPOINT;
+                    intr = 1'b1;
+                    mret = 1'b0;
+                end
+                else if (instr[31:7] == 25'b0000000000000000000000000) begin
+                    // ecall
+                    cause = `MCAUSE_ECALLMM;
+                    intr = 1'b1;
+                    mret = 1'b0;
+                end
+                else if (instr[31:7] == 25'b0011000000100000000000000) begin
+                    // mret
+                    mret = 1'b1;
+                    intr = 1'b0;
+                end
+                else begin
+                    // Unknown or unsupported instruction
+                    legal = 1'b0;
+                end
             end
             else begin
+                // Zicsr
                 csr_op = funct3[1:0];
                 operand1 = (funct3[2] == 1'b1) ? `D_OPR1_ZIMM : `D_OPR1_RS1;
                 operand2 = `D_OPR2_IMM;
                 imm = imm_i_type;
+                intr = 1'b0;
+                mret = 1'b0;
                 wb_en = 1'b1;
-                legal = 1'b1;
                 if (csr_op == 2'd0) begin
                     legal = 1'b0;
                 end
             end
-        end*/
-        `OP_ENVCSR: begin
-            op_type = `OT_CSR;
+        end
+        /*`OP_ENVCSR: begin
+            op_type = `OT_TRAP;
             // Decode as nop for now
             operand1 = `D_OPR1_ZERO;
             operand2 = `D_OPR2_IMM;
@@ -329,7 +359,7 @@ module du(
             imm = 64'bx;
             wb_en = 1'b0;
             legal = 1'b1;
-        end
+        end*/
 
         endcase
 
@@ -340,6 +370,15 @@ module du(
         // RV-F
 
         // RV-D
+
+        // Handling illegal instruction
+        if (!legal) begin
+            // Send them to CSR pipe
+            op_type = `OT_TRAP;
+            cause = `MCAUSE_ILLEGALI;
+            intr = 1'b1;
+            mret = 1'b0;
+        end
     end
 
 endmodule

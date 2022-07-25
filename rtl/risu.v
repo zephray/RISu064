@@ -39,7 +39,8 @@ module risu(
     input  wire [2:0]   bus_resp_size,
     input  wire [4:0]   bus_resp_dstid,
     input  wire         bus_resp_valid,
-    output wire         bus_resp_ready
+    output wire         bus_resp_ready,
+    input  wire         ext_interrupt
 );
 
     parameter USE_L1_CACHE = 1'b1;
@@ -62,6 +63,8 @@ module risu(
     wire        dm_resp_valid;
     wire        dm_flush_req;
     wire        dm_flush_resp;
+    wire        extint_software = 1'b0; // TODO: Implement CLINT
+    wire        extint_timer = 1'b0;
 
     /* verilator lint_off UNUSED */
     // Only use low 48 bit of address
@@ -91,7 +94,10 @@ module risu(
         .dm_resp_rdata(dm_resp_rdata),
         .dm_resp_valid(dm_resp_valid),
         .dm_flush_req(dm_flush_req),
-        .dm_flush_resp(dm_flush_resp)
+        .dm_flush_resp(dm_flush_resp),
+        .extint_software(extint_software),
+        .extint_timer(extint_timer),
+        .extint_external(ext_interrupt)
     );
 
     // Signals after cache, or directly from CPU

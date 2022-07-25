@@ -46,6 +46,10 @@ module ix(
     input  wire         dec_ix_br_inj_pc,
     input  wire         dec_ix_mem_sign,
     input  wire [1:0]   dec_ix_mem_width,
+    input  wire [1:0]   dec_ix_csr_op,
+    input  wire         dec_ix_mret,
+    input  wire         dec_ix_intr,
+    input  wire [3:0]   dec_ix_cause,
     input  wire [1:0]   dec_ix_operand1,
     input  wire [1:0]   dec_ix_operand2,
     input  wire [63:0]  dec_ix_imm,
@@ -101,6 +105,19 @@ module ix(
     input  wire [63:0]  lsp_wb_result,
     input  wire         lsp_wb_wb_en,
     input  wire         lsp_wb_valid,
+    // To trap unit
+    output reg  [63:0]  ix_trap_pc,
+    output reg  [4:0]   ix_trap_dst,
+    output reg  [1:0]   ix_trap_csr_op,
+    output reg  [11:0]  ix_trap_csr_id,
+    output reg  [63:0]  ix_trap_csr_opr,
+    output reg          ix_trap_mret,
+    output reg          ix_trap_int,
+    output reg          ix_trap_intexc,
+    output reg  [3:0]   ix_trap_cause,
+    output reg          ix_trap_valid,
+    input  wire         ix_trap_ready,
+    input  wire [15:0]  trap_ix_ip,
     // Fence I
     output reg          im_invalidate_req,
     input  wire         im_invalidate_resp,
@@ -211,7 +228,8 @@ module ix(
     wire [63:0] operand1_value = ((dec_ix_operand1 == `D_OPR1_PC) ||
             (dec_ix_br_inj_pc)) ? (dec_ix_pc) :
             (dec_ix_operand1 == `D_OPR1_RS1) ? (rs_val[0]) :
-            (dec_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) : (64'bx);
+            (dec_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) :
+            (dec_ix_operand1 == `D_OPR1_ZIMM) ? ({59'd0, dec_ix_rs1}) : (64'bx);
     wire [63:0] operand2_value =
             (dec_ix_operand2 == `D_OPR2_RS2) ? (rs_val[1]) :
             (dec_ix_operand2 == `D_OPR2_IMM) ? (dec_ix_imm) :
@@ -219,19 +237,23 @@ module ix(
     wire [63:0] br_base = (dec_ix_br_base_src == `BB_PC) ? (dec_ix_pc) :
             (rs_val[0]);
 
+    // Trap instruction also blocks all proceeding instructions
+    reg trap_ongoing;
+    wire int_pending = (trap_ix_ip != 16'd0);
     wire ix_opr_ready = operand1_ready && operand2_ready && dst_ready;
-    wire ix_issue_ip0 = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
+    wire ix_issue_ip0 = (dec_ix_valid) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
-            (ix_ip_ready) && !pipe_flush;
-    wire ix_issue_lsp = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
+            (ix_ip_ready) && !pipe_flush && !trap_ongoing && !int_pending;
+    wire ix_issue_lsp = (dec_ix_valid) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
-            (ix_lsp_ready) && !pipe_flush;
-    wire ix_issue_csr = (dec_ix_valid) && (dec_ix_legal) && (ix_opr_ready) &&
-            (dec_ix_op_type == `OT_CSR) && ix_barrier_done && !pipe_flush;
+            (ix_lsp_ready) && !pipe_flush && !trap_ongoing && !int_pending;
+    wire ix_issue_trap = (dec_ix_valid) && (ix_opr_ready) &&
+            (dec_ix_op_type == `OT_TRAP) && ix_barrier_done && !pipe_flush &&
+            !trap_ongoing && !int_pending;
     // Wait for LS pipe to finish
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
     reg ix_fencei_done = 1'b0;
-    wire ix_fence_done = (dec_ix_valid) && (dec_ix_legal) &&
+    wire ix_fence_done = (dec_ix_valid) &&
             (dec_ix_op_type == `OT_FENCE) && (ix_fenced_done) &&
             (!dec_ix_fencei || ix_fencei_done);
     // Wait for integer pipe to finish
@@ -240,7 +262,7 @@ module ix(
     wire ix_barrier_done = ix_fenced_done && ix_ibarrier_done;
     wire ix_issue =
             // Instructions to pipes
-            ix_issue_ip0 || ix_issue_lsp || ix_issue_csr ||
+            ix_issue_ip0 || ix_issue_lsp || ix_issue_trap ||
             // Fake instruction for fence/ barrier
             ix_fence_done;
 
@@ -250,7 +272,7 @@ module ix(
     // Fencei handling
     reg im_invalidate_done, dm_flush_done;
     always @(posedge clk) begin
-        if ((!rst) && (dec_ix_valid) && (dec_ix_legal) && (dec_ix_fencei) &&
+        if ((!rst) && (dec_ix_valid) && (dec_ix_fencei) &&
                 (!ix_fencei_done)) begin
             im_invalidate_req <= 1'b1;
             dm_flush_req <= 1'b1;
@@ -312,10 +334,50 @@ module ix(
         else if (ix_lsp_ready) begin
             ix_lsp_valid <= 1'b0;
         end
+        if (ix_issue_trap) begin
+            ix_trap_pc <= dec_ix_pc;
+            ix_trap_dst <= dec_ix_rd;
+            ix_trap_csr_op <= dec_ix_csr_op;
+            ix_trap_csr_id <= dec_ix_imm[11:0];
+            ix_trap_csr_opr <= operand1_value;
+            ix_trap_mret <= dec_ix_mret;
+            ix_trap_int <= dec_ix_intr;
+            ix_trap_intexc <= `MCAUSE_EXCEPTION;
+            ix_trap_cause <= dec_ix_cause;
+            ix_trap_valid <= 1'b1;
+            trap_ongoing <= 1'b1;
+        end
+        else if (int_pending) begin
+            // Respond to interrupt
+            ix_trap_pc <= dec_ix_pc;
+            //ix_trap_dst <= 5'bx;
+            //ix_trap_csr_op <= 2'bx;
+            //ix_trap_csr_id <= 12'bx;
+            //ix_trap_csr_opr <= 64'bx;
+            ix_trap_mret <= 1'b0;
+            ix_trap_int <= 1'b1;
+            ix_trap_intexc <= `MCAUSE_INTERRUPT;
+            ix_trap_cause <=
+                    trap_ix_ip[`MIE_MSI] ? `MCAUSE_MSI :
+                    trap_ix_ip[`MIE_MTI] ? `MCAUSE_MTI :
+                    trap_ix_ip[`MIE_MEI] ? `MCAUSE_MEI : 4'bx;
+            ix_trap_valid <= 1'b1;
+            trap_ongoing <= 1'b1;
+        end
+        else if (ix_trap_ready) begin
+            if (ix_trap_valid) begin
+                ix_trap_valid <= 1'b0;
+            end
+            else begin
+                trap_ongoing <= 1'b0;
+            end
+        end
 
         if (rst) begin
             ix_ip_valid <= 1'b0;
             ix_lsp_valid <= 1'b0;
+            ix_trap_valid <= 1'b0;
+            trap_ongoing <= 1'b0;
         end
     end
 endmodule

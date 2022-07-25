@@ -50,6 +50,10 @@ module dec(
     output reg          dec_ix_br_inj_pc,
     output reg          dec_ix_mem_sign,
     output reg  [1:0]   dec_ix_mem_width,
+    output reg  [1:0]   dec_ix_csr_op,
+    output reg          dec_ix_mret,
+    output reg          dec_ix_intr,
+    output reg  [3:0]   dec_ix_cause,
     output reg  [1:0]   dec_ix_operand1,
     output reg  [1:0]   dec_ix_operand2,
     output reg  [63:0]  dec_ix_imm,
@@ -73,10 +77,14 @@ module dec(
     wire dec_br_inj_pc;
     wire dec_mem_sign;
     wire [1:0] dec_mem_width;
+    wire [1:0] dec_csr_op;
+    wire dec_mret;
+    wire dec_intr;
+    wire [3:0] dec_cause;
+    wire [2:0] dec_op_type;
     wire [1:0] dec_operand1;
     wire [1:0] dec_operand2;
     wire [63:0] dec_imm;
-    wire [2:0] dec_op_type;
     wire dec_legal;
     wire dec_wb_en;
     wire [4:0] dec_rs1;
@@ -94,6 +102,10 @@ module dec(
         .br_inj_pc(dec_br_inj_pc),
         .mem_sign(dec_mem_sign),
         .mem_width(dec_mem_width),
+        .csr_op(dec_csr_op),
+        .mret(dec_mret),
+        .intr(dec_intr),
+        .cause(dec_cause),
         .op_type(dec_op_type),
         .operand1(dec_operand1),
         .operand2(dec_operand2),
@@ -134,6 +146,10 @@ module dec(
             dec_ix_br_inj_pc <= dec_br_inj_pc;
             dec_ix_mem_sign <= dec_mem_sign;
             dec_ix_mem_width <= dec_mem_width;
+            dec_ix_csr_op <= dec_csr_op;
+            dec_ix_mret <= dec_mret;
+            dec_ix_intr <= dec_intr;
+            dec_ix_cause <= dec_cause;
             dec_ix_operand1 <= dec_operand1;
             dec_ix_operand2 <= dec_operand2;
             dec_ix_imm <= dec_imm;

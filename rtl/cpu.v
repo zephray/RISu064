@@ -27,6 +27,7 @@
 module cpu(
     input  wire         clk,
     input  wire         rst,
+    // Instruction memory
     output wire [63:0]  im_req_addr,
     output wire         im_req_valid,
     input  wire         im_req_ready,
@@ -34,6 +35,7 @@ module cpu(
     input  wire         im_resp_valid,
     output wire         im_invalidate_req,
     input  wire         im_invalidate_resp,
+    // Data memory
     output wire [63:0]  dm_req_addr,
     output wire [63:0]  dm_req_wdata,
     output wire [7:0]   dm_req_wmask,
@@ -43,8 +45,15 @@ module cpu(
     input  wire [63:0]  dm_resp_rdata,
     input  wire         dm_resp_valid,
     output wire         dm_flush_req,
-    input  wire         dm_flush_resp
+    input  wire         dm_flush_resp,
+    // From CLINT
+    input  wire         extint_software,
+    input  wire         extint_timer,
+    // From PLIC
+    input  wire         extint_external
 );
+    parameter HARTID = 64'd0;
+
     // TODO
     wire        lsp_unaligned_load;
     wire        lsp_unaligned_store;
@@ -81,9 +90,16 @@ module cpu(
     wire [63:0] ip_if_new_pc;
     wire        ix_if_pc_override;
     wire [63:0] ix_if_new_pc;
-    wire        if_pc_override = ip_if_pc_override || ix_if_pc_override;
-    wire [63:0] if_new_pc = ip_if_pc_override ? ip_if_new_pc : ix_if_new_pc;
+    wire        trap_if_pc_override;
+    wire [63:0] trap_if_new_pc;
+    wire        if_pc_override;
+    wire [63:0] if_new_pc;
     wire        pipe_flush = if_pc_override;
+
+    assign if_pc_override = ip_if_pc_override || ix_if_pc_override ||
+            trap_if_pc_override;
+    assign if_new_pc = ip_if_pc_override ? ip_if_new_pc :
+            ix_if_pc_override ? ix_if_new_pc : trap_if_new_pc;
 
     ifp ifp (
         .clk(clk),
@@ -119,6 +135,10 @@ module cpu(
     wire        dec_ix_br_inj_pc;
     wire        dec_ix_mem_sign;
     wire [1:0]  dec_ix_mem_width;
+    wire [1:0]  dec_ix_csr_op;
+    wire        dec_ix_mret;
+    wire        dec_ix_intr;
+    wire [3:0]  dec_ix_cause;
     wire [1:0]  dec_ix_operand1;
     wire [1:0]  dec_ix_operand2;
     wire [63:0] dec_ix_imm;
@@ -155,6 +175,10 @@ module cpu(
         .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
+        .dec_ix_csr_op(dec_ix_csr_op),
+        .dec_ix_mret(dec_ix_mret),
+        .dec_ix_intr(dec_ix_intr),
+        .dec_ix_cause(dec_ix_cause),
         .dec_ix_operand1(dec_ix_operand1),
         .dec_ix_operand2(dec_ix_operand2),
         .dec_ix_imm(dec_ix_imm),
@@ -212,6 +236,18 @@ module cpu(
     wire        lsp_wb_wb_en;
     wire        lsp_wb_valid;
     wire        lsp_wb_ready;
+    wire [63:0] ix_trap_pc;
+    wire [4:0]  ix_trap_dst;
+    wire [1:0]  ix_trap_csr_op;
+    wire [11:0] ix_trap_csr_id;
+    wire [63:0] ix_trap_csr_opr;
+    wire        ix_trap_mret;
+    wire        ix_trap_int;
+    wire        ix_trap_intexc;
+    wire [3:0]  ix_trap_cause;
+    wire        ix_trap_valid;
+    wire        ix_trap_ready;
+    wire [15:0] trap_ix_ip;
     ix ix(
         .clk(clk),
         .rst(rst),
@@ -234,6 +270,10 @@ module cpu(
         .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
+        .dec_ix_csr_op(dec_ix_csr_op),
+        .dec_ix_mret(dec_ix_mret),
+        .dec_ix_intr(dec_ix_intr),
+        .dec_ix_cause(dec_ix_cause),
         .dec_ix_operand1(dec_ix_operand1),
         .dec_ix_operand2(dec_ix_operand2),
         .dec_ix_imm(dec_ix_imm),
@@ -264,6 +304,7 @@ module cpu(
         .ix_ip_bt(ix_ip_bt),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
+        // Hazard detection & Bypassing
         .ip_ix_forwarding(ip_ix_forwarding),
         .ip_wb_dst(ip_wb_dst),
         .ip_wb_result(ip_wb_result),
@@ -288,6 +329,19 @@ module cpu(
         .lsp_wb_result(lsp_wb_result),
         .lsp_wb_wb_en(lsp_wb_wb_en),
         .lsp_wb_valid(lsp_wb_valid),
+        // To trap unit
+        .ix_trap_pc(ix_trap_pc),
+        .ix_trap_dst(ix_trap_dst),
+        .ix_trap_csr_op(ix_trap_csr_op),
+        .ix_trap_csr_id(ix_trap_csr_id),
+        .ix_trap_csr_opr(ix_trap_csr_opr),
+        .ix_trap_mret(ix_trap_mret),
+        .ix_trap_int(ix_trap_int),
+        .ix_trap_intexc(ix_trap_intexc),
+        .ix_trap_cause(ix_trap_cause),
+        .ix_trap_valid(ix_trap_valid),
+        .ix_trap_ready(ix_trap_ready),
+        .trap_ix_ip(trap_ix_ip),
         // Fence I
         .im_invalidate_req(im_invalidate_req),
         .im_invalidate_resp(im_invalidate_resp),
@@ -372,6 +426,47 @@ module cpu(
         .lsp_unaligned_store(lsp_unaligned_store)
     );
 
+    wire [4:0] trap_wb_dst;
+    wire [63:0] trap_wb_result;
+    wire [63:0] trap_wb_pc;
+    wire trap_wb_wb_en;
+    wire trap_wb_valid;
+    wire trap_wb_ready;
+    wire [1:0] wb_trap_instret;
+    trap #(.HARTID(HARTID)) trap(
+        .clk(clk),
+        .rst(rst),
+        // External interrupt
+        .extint_software(extint_software),
+        .extint_timer(extint_timer),
+        .extint_external(extint_external),
+        // From issue
+        .ix_trap_pc(ix_trap_pc),
+        .ix_trap_dst(ix_trap_dst),
+        .ix_trap_csr_op(ix_trap_csr_op),
+        .ix_trap_csr_id(ix_trap_csr_id),
+        .ix_trap_csr_opr(ix_trap_csr_opr),
+        .ix_trap_mret(ix_trap_mret),
+        .ix_trap_int(ix_trap_int),
+        .ix_trap_intexc(ix_trap_intexc),
+        .ix_trap_cause(ix_trap_cause),
+        .ix_trap_valid(ix_trap_valid),
+        .ix_trap_ready(ix_trap_ready),
+        .trap_ix_ip(trap_ix_ip),
+        // To writeback
+        .trap_wb_dst(trap_wb_dst),
+        .trap_wb_result(trap_wb_result),
+        .trap_wb_pc(trap_wb_pc),
+        .trap_wb_wb_en(trap_wb_wb_en),
+        .trap_wb_valid(trap_wb_valid),
+        .trap_wb_ready(trap_wb_ready),
+        // From writeback, for counting
+        .wb_trap_instret(wb_trap_instret),
+        // To instruction fetch unit
+        .trap_if_pc_override(trap_if_pc_override),
+        .trap_if_new_pc(trap_if_new_pc)
+    );
+
     wb wb(
         .clk(clk),
         .rst(rst),
@@ -392,7 +487,16 @@ module cpu(
         .lsp_wb_pc(lsp_wb_pc),
         .lsp_wb_wb_en(lsp_wb_wb_en),
         .lsp_wb_valid(lsp_wb_valid),
-        .lsp_wb_ready(lsp_wb_ready)
+        .lsp_wb_ready(lsp_wb_ready),
+        // From trap unit
+        .trap_wb_dst(trap_wb_dst),
+        .trap_wb_result(trap_wb_result),
+        .trap_wb_pc(trap_wb_pc),
+        .trap_wb_wb_en(trap_wb_wb_en),
+        .trap_wb_valid(trap_wb_valid),
+        .trap_wb_ready(trap_wb_ready),
+        // To trap unit
+        .wb_trap_instret(wb_trap_instret)
     );
 
 endmodule

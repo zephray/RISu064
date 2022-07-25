@@ -51,7 +51,9 @@ module kl2ml_bridge(
     output wire [31:0]  ml_data_o,
     input  wire [31:0]  ml_data_i,
     output wire         ml_data_oe,
-    output wire         ml_data_ie
+    output wire         ml_data_ie,
+    // Sideband signal
+    output reg  [31:0]  sideband
 );
 
     reg clk_div;
@@ -94,6 +96,19 @@ module kl2ml_bridge(
         end
     end
 
+    wire [31:0] kl_rx_addr;
+    wire kl_rxsb_active = kl_rx_valid && (kl_resp_dstid == 5'd31);
+    wire kl_rx_ready = (kl_rxsb_active) ? (1'b1) : (kl_resp_ready);
+    wire kl_rx_valid;
+    assign kl_resp_valid = (kl_rxsb_active) ? (1'b0) : (kl_rx_valid);
+
+    always @(posedge clk) begin
+        if (kl_rxsb_active)
+            sideband <= kl_rx_addr;
+        if (rst)
+            sideband <= 32'b0;
+    end
+
     ml_xcvr #(.INITIAL_ROLE(0)) ml_xcvr (
         .clk(clk),
         .rst(rst),
@@ -104,15 +119,13 @@ module kl2ml_bridge(
         .kl_tx_id(kl_req_srcid),
         .kl_tx_valid(kl_req_valid),
         .kl_tx_ready(kl_req_ready),
-        /* verilator lint_off PINCONNECTEMPTY */
-        .kl_rx_addr(),
-        /* verilator lint_on PINCONNECTEMPTY */
+        .kl_rx_addr(kl_rx_addr),
         .kl_rx_data(kl_resp_rdata),
         .kl_rx_den(kl_resp_ren),
         .kl_rx_size(kl_resp_size),
         .kl_rx_id(kl_resp_dstid),
-        .kl_rx_valid(kl_resp_valid),
-        .kl_rx_ready(kl_resp_ready),
+        .kl_rx_valid(kl_rx_valid),
+        .kl_rx_ready(kl_rx_ready),
         .ml_txbr(ml_abr),
         .ml_rxbr(ml_bbr),
         .ml_data_o(ml_data_o),

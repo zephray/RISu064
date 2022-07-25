@@ -49,7 +49,9 @@ module ml2kl_bridge(
     output wire [31:0]  ml_data_o,
     input  wire [31:0]  ml_data_i,
     output wire         ml_data_oe,
-    output wire         ml_data_ie
+    output wire         ml_data_ie,
+    // Sideband signal
+    input  wire [31:0]  sideband
 );
 
     // Mask-less to aligned access + wmask conversion
@@ -82,17 +84,55 @@ module ml2kl_bridge(
             end
         end
     end
+
+    wire [31:0] kl_tx_addr;
+    wire kl_tx_den;
+    wire [63:0] kl_tx_data;
+    wire [2:0] kl_tx_size;
+    wire [4:0] kl_tx_id;
+    wire kl_tx_valid;
+    wire kl_tx_ready;
+
+    wire [31:0] kl_sbtx_addr = sideband;
+    wire kl_sbtx_den = 1'b0;
+    wire [63:0] kl_sbtx_data = 64'bx;
+    wire [2:0] kl_sbtx_size = 3'd0;
+    wire [4:0] kl_sbtx_id = 5'd31;
+    reg kl_sbtx_valid;
+    wire kl_sbtx_ready;
+
+    reg [31:0] sideband_last;
+    always @(posedge clk) begin
+        sideband_last <= sideband;
+        if (kl_sbtx_valid && kl_sbtx_ready) begin
+            kl_sbtx_valid <= 1'b0;
+        end
+        else if ((sideband_last != sideband) && (!kl_resp_valid)) begin
+            kl_sbtx_valid <= 1'b1;
+        end
+        if (rst)
+            kl_sbtx_valid <= 1'b0;
+    end
+
+    assign kl_tx_addr = (kl_sbtx_valid) ? (kl_sbtx_addr) : (32'd0);
+    assign kl_tx_den = (kl_sbtx_valid) ? (kl_sbtx_den) : (kl_resp_ren);
+    assign kl_tx_data = (kl_sbtx_valid) ? (kl_sbtx_data) : (kl_resp_rdata);
+    assign kl_tx_size = (kl_sbtx_valid) ? (kl_sbtx_size) : (kl_resp_size);
+    assign kl_tx_id = (kl_sbtx_valid) ? (kl_sbtx_id) : (kl_resp_dstid);
+    assign kl_tx_valid = (kl_sbtx_valid) ? (kl_sbtx_valid) : (kl_resp_valid);
+    assign kl_resp_ready = (kl_sbtx_valid) ? (1'b0) : (kl_tx_ready);
+    assign kl_sbtx_ready = (kl_sbtx_valid) ? (kl_tx_ready) : (1'b0);
     
     ml_xcvr #(.INITIAL_ROLE(1)) ml_xcvr (
         .clk(clk),
         .rst(rst),
-        .kl_tx_addr(32'd0),
-        .kl_tx_den(kl_resp_ren),
-        .kl_tx_data(kl_resp_rdata),
-        .kl_tx_size(kl_resp_size),
-        .kl_tx_id(kl_resp_dstid),
-        .kl_tx_valid(kl_resp_valid),
-        .kl_tx_ready(kl_resp_ready),
+        .kl_tx_addr(kl_tx_addr),
+        .kl_tx_den(kl_tx_den),
+        .kl_tx_data(kl_tx_data),
+        .kl_tx_size(kl_tx_size),
+        .kl_tx_id(kl_tx_id),
+        .kl_tx_valid(kl_tx_valid),
+        .kl_tx_ready(kl_tx_ready),
         .kl_rx_addr(ml_req_addr),
         .kl_rx_data(kl_req_wdata),
         .kl_rx_den(kl_req_wen),

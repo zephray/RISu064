@@ -142,16 +142,6 @@ module l1cache(
             .wr({10'b0, p2_cache_meta_wr[i]})
         );
 
-        always @(posedge clk) begin
-            if (p2_cache_meta_we[i]) begin
-                $display("Cache way %d line %02x refill valid %d dirty %d tag %019x", i,
-                        p2_cache_meta_waddr_mux,
-                        p2_cache_meta_wr[i][BIT_VALID],
-                        p2_cache_meta_wr[i][BIT_DIRTY],
-                        p2_cache_meta_wr[i][BIT_TAG_END:BIT_TAG_START]);
-            end
-        end
-
         assign p2_cache_meta_rd[i] = meta_sram_rd[i][CACHE_LEN_TOTAL-1:0];
 
         ram_1024_64 cache_data(
@@ -295,8 +285,8 @@ module l1cache(
             (p2_cache_comparator[0]) ? (p2_cache_data_rd[0]) :
             (p2_cache_comparator[1]) ? (p2_cache_data_rd[1]) : (64'bx);
     assign cache_int_ready =
-            ((cache_state == STATE_READY) || (cache_state == STATE_RETRY)) &&
-            !p2_cache_miss;
+            ((cache_state == STATE_PREPARE) || (cache_state == STATE_READY) ||
+            (cache_state == STATE_RETRY)) && !p2_cache_miss;
     assign core_resp_rdata = cache_int_ready ? (p2_core_resp_rdata) : (64'bx);
     assign core_resp_valid = cache_int_ready ? (p2_core_resp_valid) : (1'b0);
 
@@ -361,7 +351,6 @@ module l1cache(
                     // Issue write next cycle
                     cache_state <= STATE_FLUSH;
                     $display("Cache miss, way %d flush.", cache_victim);
-                    //$stop;
                 end
                 else begin
                     // flush is not required
@@ -392,7 +381,9 @@ module l1cache(
             if (mem_req_ready) begin
                 // Data in last beat has been accepted, continue to next beat
                 reload_counter <= reload_counter + 1;
+                /* verilator lint_off WIDTH */
                 if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
+                /* verilator lint_on WIDTH */
                     // Writeback finished, waiting for acknowledge from L2
                     cache_state <= STATE_FLUSH_WAIT_ACK;
                     mem_resp_ready <= 1'b1;
@@ -422,7 +413,9 @@ module l1cache(
             // Writeback way data if got a beat from L2
             if (mem_resp_valid) begin
                 reload_counter <= reload_counter + 1;
+                /* verilator lint_off WIDTH */
                 if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
+                /* verilator lint_on WIDTH */
                     mem_resp_ready <= 1'b0;
                     cache_state <= STATE_WAY_WB;
                     cache_meta_we_reg[cache_victim] <= 1'b1;
@@ -462,7 +455,9 @@ module l1cache(
             cache_data_we_reg[0] <= 1'b0;
             cache_data_we_reg[1] <= 1'b0;
             cache_way_wb_src <= CACHE_WB_FLUSH;
+            /* verilator lint_off WIDTH */
             invalidate_counter <= CACHE_BLOCK - 1;
+            /* verilator lint_on WIDTH */
             invalidate_en <= 1'b1;
             p2_core_req_valid <= 1'b0;
         end

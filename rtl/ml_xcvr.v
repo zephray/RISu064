@@ -142,9 +142,13 @@ module ml_xcvr(
         .b_ready(rx_dfifo_b_ready)
     );
     
+    /* verilator lint_off UNUSED */
     wire [63:0] rx_header = rx_dfifo_b_data[63:0];
+    /* verilator lint_on UNUSED */
     wire [2:0] rx_opcode = rx_header[62:60];
+    /* verilator lint_off UNUSED */
     wire [3:0] rx_param = rx_header[59:56];
+    /* verilator lint_on UNUSED */
     wire [2:0] rx_size = rx_header[55:53];
     wire [4:0] rx_dstid = rx_header[52:48];
     wire [31:0] rx_addr = rx_header[31:0];

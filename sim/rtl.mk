@@ -8,8 +8,7 @@
 ##   Use Xilinx ISE or Quartus for FPGA build.
 ################################################################################
 
-TARGET = simtop
-
+TARGET ?= simtop
 all: $(TARGET)
 
 VOBJ := obj_dir

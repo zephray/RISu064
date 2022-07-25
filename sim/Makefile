@@ -2,13 +2,14 @@ TARGET := simulator
 OBJODIR := obj
 RTLDIR := .
 
+SIMTARGET ?= risu
 ifeq ($(VERILATOR_ROOT),)
 VERILATOR_ROOT ?= $(shell bash -c 'verilator -V|grep VERILATOR_ROOT | head -1 | sed -e " s/^.*=\s*//"')
 endif
 VROOT := $(VERILATOR_ROOT)
 VINCD := $(VROOT)/include
 RTLOBJDIR := $(RTLDIR)/obj_dir
-RTLOBJ := $(RTLOBJDIR)/Vsimtop__ALL.a
+RTLOBJ := $(RTLOBJDIR)/V$(SIMTARGET)__ALL.a
 
 CC = g++
 CXX = g++
@@ -16,8 +17,10 @@ LD = g++
 
 LIBS := -lm
 
+SIMTARGET_UC := $(shell echo '${SIMTARGET}' | tr '[:lower:]' '[:upper:]')
+
 COMMONFLAGS := \
-	-Wall -Og -g
+	-Wall -Og -g -DTEST_${SIMTARGET_UC}
 
 CPPFLAGS := \
 	-faligned-new \
@@ -49,7 +52,7 @@ OBJS += $(RTLOBJ)
 
 $(RTLOBJ):
 	@echo Building RTL
-	make -f rtl.mk
+	TARGET=$(SIMTARGET) make -f rtl.mk
 
 $(OBJODIR)/%.o: %.c $(RTLOBJ)
 	@echo [CC] $<
@@ -75,7 +78,7 @@ PHONY += clean
 clean:
 	rm -rf $(OBJODIR)
 	rm -f $(TARGET)
-	make -f rtl.mk clean
+	TARGET=$(SIMTARGET) make -f rtl.mk clean
 	@echo 'clean finish'
 
 # Declare the contents of the .PHONY variable as phony.  We keep that

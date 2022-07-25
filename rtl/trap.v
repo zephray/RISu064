@@ -60,10 +60,9 @@ module trap(
 );
     parameter HARTID = 64'd0;
 
-    localparam ST_IDLE = 2'd0;
-    localparam ST_CSRWR = 2'd1;
-    localparam ST_INT = 2'd2;
-    reg [1:0] state;
+    localparam ST_IDLE = 1'd0;
+    localparam ST_CSRWR = 1'd1;
+    reg [0:0] state;
 
     reg [63:0] mcycle;
     reg [63:0] minstret;

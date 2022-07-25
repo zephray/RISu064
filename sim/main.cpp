@@ -27,9 +27,15 @@
 
 #include "verilated.h"
 #include "verilated_vcd_c.h"
+#ifdef TEST_SIMTOP
 #include "Vsimtop.h"
 #include "Vsimtop___024root.h"
+#elif (defined(TEST_RISU))
+#include "Vrisu.h"
+#include "Vrisu___024root.h"
+#endif
 
+#include "memsim.h"
 #include "klmemsim.h"
 #include "earliercon.h"
 
@@ -39,7 +45,11 @@
 #define CON_BASE 0x20000000
 
 // Verilator related
+#ifdef TEST_SIMTOP
 Vsimtop *core;
+#elif (defined(TEST_RISU))
+Vrisu *core;
+#endif
 VerilatedVcdC *trace;
 uint64_t tickcount;
 
@@ -49,11 +59,20 @@ bool unlimited = true;
 bool verbose = false;
 uint64_t max_cycles;
 
+#ifdef TEST_SIMTOP
 KLMemsim *ram;
+#elif (defined(TEST_RISU))
+Memsim *ram_iport;
+Memsim *ram_dport;
+#endif
 Earliercon *earliercon;
 
 #define CONCAT(a,b) a##b
+#ifdef TEST_SIMTOP
 #define SIGNAL(x) CONCAT(core->rootp->simtop__DOT__asictop__DOT__risu__DOT__cpu__DOT__,x)
+#elif (defined(TEST_RISU))
+#define SIGNAL(x) CONCAT(core->rootp->risu__DOT__cpu__DOT__,x)
+#endif
 
 void tick() {
     // Software simulated parts should read the signal
@@ -61,6 +80,7 @@ void tick() {
     // path), but only put the data out after the
     // clock edge (DFF)
 
+#ifdef TEST_SIMTOP
     // Note: accessing not mapped address causes deadlock
     uint8_t bus_req_ready = core->bus_req_ready;
     uint64_t bus_resp_rdata = core->bus_resp_rdata;
@@ -85,15 +105,6 @@ void tick() {
         bus_resp_valid,
         core->bus_resp_ready
     );
-    /*earliercon->apply(
-        core->dm_addr,
-        dm_rdata,
-        core->dm_wdata,
-        core->dm_wmask,
-        core->dm_wen,
-        core->dm_valid,
-        dm_ready
-    );*/
 
     core->clk = 1;
     core->eval();
@@ -104,6 +115,51 @@ void tick() {
     core->bus_resp_size = bus_resp_size;
     core->bus_resp_dstid = bus_resp_dstid;
     core->bus_resp_valid = bus_resp_valid;
+#elif (defined(TEST_RISU))
+    uint64_t ib_resp_rdata = core->ib_resp_rdata;
+    uint8_t ib_resp_valid = core->ib_resp_valid;
+    uint64_t db_resp_rdata = core->db_resp_rdata;
+    uint8_t db_resp_valid = core->db_resp_valid;
+
+    ib_resp_valid = 0;
+    ram_iport->apply(
+        core->ib_req_addr,
+        ib_resp_rdata,
+        0,
+        0,
+        0,
+        core->ib_req_valid,
+        ib_resp_valid
+    );
+
+    db_resp_valid = 0;
+    ram_dport->apply(
+        core->db_req_addr,
+        db_resp_rdata,
+        core->db_req_wdata,
+        core->db_req_wmask,
+        core->db_req_wen,
+        core->db_req_valid,
+        db_resp_valid
+    );
+    /*earliercon->apply(
+        core->db_req_addr,
+        db_resp_rdata,
+        core->db_req_wdata,
+        core->db_req_wmask,
+        core->db_req_wen,
+        core->db_req_valid,
+        db_resp_valid
+    );*/
+
+    core->clk = 1;
+    core->eval();
+
+    core->ib_resp_rdata = ib_resp_rdata;
+    core->ib_resp_valid = ib_resp_valid;
+    core->db_resp_rdata = db_resp_rdata;
+    core->db_resp_valid = db_resp_valid;
+#endif
 
     // Let combinational changes propagate
     core->eval();
@@ -127,17 +183,33 @@ void reset() {
     tick();
     tick();
     core->rst = 0;
+#ifdef TEST_SIMTOP
     ram->reset();
+#elif (defined(TEST_RISU))
+    ram_dport->reset();
+    ram_iport->reset();
+    core->ib_req_ready = 1;
+    core->db_req_ready = 1;
+#endif
 }
 
 int main(int argc, char *argv[]) {
     // Initialize testbench
     Verilated::commandArgs(argc, argv);
 
+#ifdef TEST_SIMTOP
     core = new Vsimtop;
+#elif (defined(TEST_RISU))
+    core = new Vrisu;
+#endif
     Verilated::traceEverOn(true);
 
+#ifdef TEST_SIMTOP
     ram = new KLMemsim(RAM_BASE, RAM_SIZE);
+#elif (defined(TEST_RISU))
+    ram_dport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
+    ram_iport = new Memsim(RAM_BASE, RAM_SIZE, false, 0);
+#endif
     earliercon = new Earliercon(CON_BASE);
 
     for (int i = 1; i < argc; i++) {
@@ -147,8 +219,10 @@ int main(int argc, char *argv[]) {
             printf("    --trace: Enable waveform trace\n"); 
             printf("    --ram <filename>: Preload RAM image file\n");
             printf("    --cycles <maxcycles>: Set simulation cycle limit\n");
+        #if (defined(TEST_RISU))
             printf("    --ilat <cycles>: Instruction memory latency\n");
             printf("    --dlat <cycles>: Data memory latency\n");
+        #endif
             printf("    --verbose: Enable verbose output\n");
             exit(0);
         }
@@ -161,7 +235,12 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
             else {
+            #ifdef TEST_SIMTOP
                 ram->load_file(argv[i + 1]);
+            #elif (defined(TEST_RISU))
+                ram_dport->load_file(argv[i + 1]);
+                ram_iport->copy(ram_dport);
+            #endif
             }
         }
         else if (strcmp(argv[i], "--cycles") == 0) {
@@ -174,7 +253,8 @@ int main(int argc, char *argv[]) {
                 max_cycles = atoi(argv[i + 1]);
             }
         }
-        /*else if (strcmp(argv[i], "--ilat") == 0) {
+        #if (defined(TEST_RISU))
+        else if (strcmp(argv[i], "--ilat") == 0) {
             if (i == argc - 1) {
                 fprintf(stderr, "Error: no cycle number provided\n");
                 exit(1);
@@ -191,9 +271,15 @@ int main(int argc, char *argv[]) {
             else {
                 ram_dport->set_latency(atoi(argv[i + 1]));
             }
-        }*/
+        }
+        #endif
         else if (strcmp(argv[i], "--verbose") == 0) {
+        #ifdef TEST_SIMTOP
             ram->set_verbose(true);
+        #elif (defined(TEST_RISU))
+            ram_dport->set_verbose(true);
+            ram_iport->set_verbose(true);
+        #endif
             verbose = true;
         }
     }
@@ -220,11 +306,11 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        if (!SIGNAL(dec_ix_legal) && SIGNAL(dec_ix_valid)) {
+        /*if (!SIGNAL(dec_ix_legal) && SIGNAL(dec_ix_valid)) {
             if (verbose)
                 printf("Encountered illegal instruction\n");
             break;
-        }
+        }*/
     }
 
     time = clock() - time;
@@ -255,7 +341,13 @@ int main(int argc, char *argv[]) {
         trace->close();
     }
 
+#ifdef TEST_SIMTOP
     delete ram;
+#elif (defined(TEST_RISU))
+    delete ram_iport;
+    delete ram_dport;
+#endif
+
     delete earliercon;
 
     return retval;

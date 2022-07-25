@@ -54,9 +54,10 @@ module cpu(
 );
     parameter HARTID = 64'd0;
 
-    // TODO
+    // Unaligned LS
     wire        lsp_unaligned_load;
     wire        lsp_unaligned_store;
+    wire [63:0] lsp_unaligned_epc;
 
     // Register file
     wire [4:0]  rf_rsrc0;
@@ -94,12 +95,14 @@ module cpu(
     wire [63:0] trap_if_new_pc;
     wire        if_pc_override;
     wire [63:0] if_new_pc;
-    wire        pipe_flush = if_pc_override;
+    wire        pipe_flush;
 
     assign if_pc_override = ip_if_pc_override || ix_if_pc_override ||
             trap_if_pc_override;
     assign if_new_pc = ip_if_pc_override ? ip_if_new_pc :
             ix_if_pc_override ? ix_if_new_pc : trap_if_new_pc;
+    assign pipe_flush = if_pc_override || lsp_unaligned_load ||
+            lsp_unaligned_store;
 
     ifp ifp (
         .clk(clk),
@@ -321,6 +324,9 @@ module cpu(
         .ix_lsp_mem_width(ix_lsp_mem_width),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
+        .lsp_unaligned_load(lsp_unaligned_load),
+        .lsp_unaligned_store(lsp_unaligned_store),
+        .lsp_unaligned_epc(lsp_unaligned_epc),
          // Hazard detection & Bypassing
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
@@ -423,7 +429,8 @@ module cpu(
         .ag_abort(pipe_flush),
         // Exception
         .lsp_unaligned_load(lsp_unaligned_load),
-        .lsp_unaligned_store(lsp_unaligned_store)
+        .lsp_unaligned_store(lsp_unaligned_store),
+        .lsp_unaligned_epc(lsp_unaligned_epc)
     );
 
     wire [4:0] trap_wb_dst;

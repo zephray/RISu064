@@ -97,6 +97,9 @@ module ix(
     output reg  [1:0]   ix_lsp_mem_width,
     output reg          ix_lsp_valid,
     input  wire         ix_lsp_ready,
+    input  wire         lsp_unaligned_load,
+    input  wire         lsp_unaligned_store,
+    input  wire [63:0]  lsp_unaligned_epc,
     // Hazard detection & Bypassing
     input  wire         lsp_ix_mem_busy,
     input  wire         lsp_ix_mem_wb_en,
@@ -240,16 +243,19 @@ module ix(
     // Trap instruction also blocks all proceeding instructions
     reg trap_ongoing;
     wire int_pending = (trap_ix_ip != 16'd0);
+    wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
     wire ix_opr_ready = operand1_ready && operand2_ready && dst_ready;
     wire ix_issue_ip0 = (dec_ix_valid) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
-            (ix_ip_ready) && !pipe_flush && !trap_ongoing && !int_pending;
+            (ix_ip_ready) && !pipe_flush && !trap_ongoing && !int_pending &&
+            !exc_pending;
     wire ix_issue_lsp = (dec_ix_valid) && (ix_opr_ready) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
-            (ix_lsp_ready) && !pipe_flush && !trap_ongoing && !int_pending;
+            (ix_lsp_ready) && !pipe_flush && !trap_ongoing && !int_pending &&
+            !exc_pending;
     wire ix_issue_trap = (dec_ix_valid) && (ix_opr_ready) &&
             (dec_ix_op_type == `OT_TRAP) && ix_barrier_done && !pipe_flush &&
-            !trap_ongoing && !int_pending;
+            !trap_ongoing && !int_pending && !exc_pending;
     // Wait for LS pipe to finish
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
     reg ix_fencei_done = 1'b0;
@@ -344,6 +350,17 @@ module ix(
             ix_trap_int <= dec_ix_intr;
             ix_trap_intexc <= `MCAUSE_EXCEPTION;
             ix_trap_cause <= dec_ix_cause;
+            ix_trap_valid <= 1'b1;
+            trap_ongoing <= 1'b1;
+        end
+        else if (exc_pending) begin
+            ix_trap_pc <= lsp_unaligned_epc;
+            ix_trap_mret <= 1'b0;
+            ix_trap_int <= 1'b1;
+            ix_trap_intexc <= `MCAUSE_EXCEPTION;
+            ix_trap_cause <=
+                    (lsp_unaligned_load) ? (`MCAUSE_LMISALGN) :
+                    (lsp_unaligned_store) ? (`MCAUSE_SMISALGN) : 4'bx;
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end

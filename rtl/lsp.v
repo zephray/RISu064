@@ -63,8 +63,9 @@ module lsp(
     // Abort the current AG stage request
     input  wire         ag_abort,
     // Exception
-    output wire         lsp_unaligned_load,
-    output wire         lsp_unaligned_store
+    output reg          lsp_unaligned_load,
+    output reg          lsp_unaligned_store,
+    output wire [63:0]  lsp_unaligned_epc
 );
 
     // AGU
@@ -93,8 +94,6 @@ module lsp(
     wire ualign_w = (ix_lsp_mem_width == `MW_WORD) && (agu_addr[1:0] != 2'b0);
     wire ualign_d = (ix_lsp_mem_width == `MW_DOUBLE) && (agu_addr[2:0] != 3'b0);
     wire ualign = ualign_h || ualign_w || ualign_d;
-    assign lsp_unaligned_load = handshaking && !ix_lsp_wb_en && ualign;
-    assign lsp_unaligned_store = handshaking && ix_lsp_wb_en && ualign;
 
     wire [63:0] mem_wdata =
             (ix_lsp_mem_width == `MW_BYTE) ? {8{ix_lsp_source[7:0]}} :
@@ -124,18 +123,20 @@ module lsp(
 
     // AG stage
     always @(posedge clk) begin
-        if (ix_lsp_valid && ix_lsp_ready && !lsp_memreq_nack) begin
+        if (handshaking && !lsp_memreq_nack) begin
             dm_req_addr <= agu_addr;
             dm_req_wdata <= mem_wdata;
             dm_req_wmask <= mem_wmask;
             dm_req_wen <= !ix_lsp_wb_en;
-            ag_m_valid <= !ag_abort;
+            ag_m_valid <= !ag_abort && !ualign; // Cancel unaligned access
             ag_m_pc <= ix_lsp_pc;
             ag_m_dst <= ix_lsp_dst;
             ag_m_wb_en <= ix_lsp_wb_en;
             ag_m_byte_offset <= agu_addr[2:0];
             ag_m_mem_sign <= ix_lsp_mem_sign;
             ag_m_mem_width <= ix_lsp_mem_width;
+            lsp_unaligned_load <= !ag_abort && ualign && !ix_lsp_wb_en;
+            lsp_unaligned_store <= !ag_abort && ualign && ix_lsp_wb_en;
         end
         else begin
             if (lsp_memreq_nack) begin
@@ -147,6 +148,8 @@ module lsp(
             end
             else
                 ag_m_valid <= 1'b0;
+            lsp_unaligned_load <= 1'b0;
+            lsp_unaligned_store <= 1'b0;
         end
         if (ag_m_valid && lsp_stalled) begin
             m_ag_access_cancelled <= 1'b1;
@@ -156,8 +159,12 @@ module lsp(
         if (rst) begin
             lsp_stalled_last <= 1'b0;
             ag_m_valid <= 1'b0;
+            lsp_unaligned_load <= 1'b0;
+            lsp_unaligned_store <= 1'b0;
         end
     end
+
+    assign lsp_unaligned_epc = ag_m_pc;
 
     // For hazard detection
     assign lsp_ix_mem_busy = dm_req_valid || lsp_stalled;
@@ -231,7 +238,9 @@ module lsp(
         .rst(rst),
         .a_data({m_wb_result, m_wb_pc, m_wb_dst, m_wb_wb_en}),
         .a_valid(dm_resp_valid),
+        /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
+        /* verilator lint_on PINCONNECTEMPTY */
         .b_data({lsp_wb_result, lsp_wb_pc, lsp_wb_dst, lsp_wb_wb_en}),
         .b_valid(lsp_wb_valid),
         .b_ready(lsp_wb_ready)

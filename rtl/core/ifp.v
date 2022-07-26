@@ -150,13 +150,13 @@ module ifp(
         .b_ready(if_dec_ready)
     );
 
-    `ifdef VERBOSE
+    /*`ifdef VERBOSE
     always @(posedge clk) begin
         if (if_dec_valid && if_dec_ready) begin
             $display("IF %016x INSTR %08x", if_dec_pc, if_dec_instr);
         end
     end
-    `endif
+    `endif*/
 
     assign if_dec_valid = (if_dec_pc_override || if_dec_pc_override_late) ? 1'b0 : fifo_valid;
 

@@ -122,7 +122,19 @@ module wb(
     assign trap_wb_ready = !(trap_wb_valid && (!trap_wb_ac && !trap_rwowb_req));
 
     // Instruction retire count
-    assign wb_trap_instret = (ip_wb_valid && ip_wb_ready) +
-            (lsp_wb_valid && lsp_wb_ready) + (trap_wb_valid && trap_wb_ready);
+    reg ip_retire;
+    reg lsp_retire;
+    reg trap_retire;
+    always @(posedge clk) begin
+        ip_retire <= (ip_wb_valid && ip_wb_ready);
+        lsp_retire <= (lsp_wb_valid && lsp_wb_ready);
+        trap_retire <= (trap_wb_valid && trap_wb_ready);
+        if (rst) begin
+            ip_retire <= 1'b0;
+            lsp_retire <= 1'b0;
+            trap_retire <= 1'b0;
+        end
+    end
+    assign wb_trap_instret = ip_retire + lsp_retire + trap_retire;
 
 endmodule

@@ -47,7 +47,7 @@ module ml_xcvr(
     // MLink Generic
     output wire         ml_txbr,
     input  wire         ml_rxbr,
-    output reg  [31:0]  ml_data_o,
+    output wire [31:0]  ml_data_o,
     input  wire [31:0]  ml_data_i,
     output reg          ml_data_oe,
     output reg          ml_data_ie

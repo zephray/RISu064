@@ -68,64 +68,27 @@ Note: When wiring, do not swap abr and bbr.
 
 ### Request (A->B)
 
-The request header is always 64bit, encoded as following:
+The header format is always 42 bits:
 
-- Bit 63: Fixed 0
-- Bit 62:60: Opcode (see below)
-- Bit 59:56: Parameter (see below)
-- Bit 55:53: 3-bit Burst size (2^n)
-- Bit 52:48: 5-bit Source ID
-- Bit 47:0: 48-bit physical address
+- Bit 41:40: 2-bit opcode
+- Bit 39:37: 3-bit Burst size (2^n)
+- Bit 36:32: 5-bit Source ID
+- Bit 31:0: 32-bit physical address
 
 The data are sent in beats, with minimum size equals to data bus width. Byte masking is not supported. As a result, no address aligning is required. The request data width, if narrower than data bus, should be placed with LSB aligned.
 
 Valid opcodes:
 
-- 3'd0: Invalid, disgard this beat
-- 3'd1: Data
-- 3'd2: Dataless (read request or write ack)
-- 3'd3: Atomic operation (RMW)
-- 3'd4-3'd7: Reserved
-
-For read/ write access:
-
-Parameter bit 3: This is an instruction access (0) / data access (1)
-Parameter bit 2: This is an cached access (0) / uncached access (1)
-Parameter bit 1: This is an normal access (0) / strongly-ordered access (1)
-Parameter bit 0: Reserved
-
-For atomic access:
-
-Paramater indicates the operation:
-
-- 4'd0: SWAP
-- 4'd1: MIN
-- 4'd2: MAX
-- 4'd3: MINU
-- 4'd4: MAXU
-- 4'd5: ADD
-- 4'd6: AND
-- 4'd7: OR
-- 4'd8: XOR
-- 4'd9-15: Reserved
+- 2'd0: Invalid, disgard this beat
+- 2'd1: Data
+- 2'd2: Dataless (read request or write ack)
+- 2'd3: Reserved
 
 ### Response (B->A)
 
-The response header is always 16bit, encoded as following:
-
-- Bit 15: Fixed 1
-- Bit 14:12: Opcode (see below)
-- Bit 11:8: Parameter (see below)
-- Bit 7:5: 3-bit Burst size (2^n)
-- Bit 4:0: 5-bit Destination ID
-
-The response header always exclusively take at least 1 beat, even if bus is wider. In case the bus is wider, the header should be aligned to MSB. The PHY may further expand it, for example if the MAC runs at 64bit beat size, PHY should extend it in case the bus is narrower.
-
-One request should always correspond to one respond, though the length would likely differ.
+The response header has the same format as the request header, so it's symmetrical.
 
 Note write acknowledge means at least all future reads from any master from the address will return the new value. This could either mean the data has arrived at DRAM, or it has been cached by system level cache, or it's in the write-queue with W-to-R bypassing support.
-
-Note current RISu implement doesn't utilize all features provided by MLink.
 
 ### Bus Arbitration
 

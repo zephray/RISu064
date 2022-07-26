@@ -30,8 +30,8 @@ module asictop(
     output wire         ml_clkn,
     output wire         ml_abr,
     input  wire         ml_bbr,
-    output wire [31:0]  ml_data_o,
-    input  wire [31:0]  ml_data_i,
+    output wire [21:0]  ml_data_o,
+    input  wire [21:0]  ml_data_i,
     output wire         ml_data_oe,
     output wire         ml_data_ie
 );
@@ -144,7 +144,6 @@ module asictop(
     );
 
     // External bus bridge
-    wire [31:0] sideband_rx;
     kl2ml_bridge kl2ml_bridge(
         .clk(clk),
         .rst(rst),
@@ -171,8 +170,7 @@ module asictop(
         .ml_data_o(ml_data_o),
         .ml_data_i(ml_data_i),
         .ml_data_oe(ml_data_oe),
-        .ml_data_ie(ml_data_ie),
-        .sideband(sideband_rx)
+        .ml_data_ie(ml_data_ie)
     );
 
 endmodule

@@ -47,8 +47,8 @@ module ml_xcvr(
     // MLink Generic
     output wire         ml_txbr,
     input  wire         ml_rxbr,
-    output wire [31:0]  ml_data_o,
-    input  wire [31:0]  ml_data_i,
+    output wire [21:0]  ml_data_o,
+    input  wire [21:0]  ml_data_i,
     output reg          ml_data_oe,
     output reg          ml_data_ie
 );
@@ -73,28 +73,27 @@ module ml_xcvr(
     wire [MAX_BURST_WIDTH-1:0] tx_burst_size = (1 << tx_size) / 8;
     wire [MAX_BURST_WIDTH-1:0] rx_burst_size = (1 << rx_size) / 8;
 
-    reg [2:0] tx_opcode;
-    reg [3:0] tx_param;
+    reg [1:0] tx_opcode;
     reg [2:0] tx_size;
     reg [4:0] tx_srcid;
     reg [31:0] tx_addr;
-    wire [63:0] tx_header = {1'b0, tx_opcode, tx_param, tx_size, tx_srcid,
-            16'b0, tx_addr};
+    wire [41:0] tx_header = {tx_opcode, tx_size, tx_srcid, tx_addr};
     reg [63:0] tx_wdata;
     reg kl_tx_ready_reg;
 
     reg tx_pending; // TODO: Handle this
 
     wire [63:0] tx_dfifo_a_data =
-            (state == ST_TX_CLAMING_BUS) ? (tx_header) :
+            (state == ST_TX_CLAMING_BUS) ? ({22'b0, tx_header}) :
             (state == ST_TX_INITDATA) ? (tx_wdata) :
             (state == ST_TX_BURST) ? (kl_tx_data) : (64'bx);
     wire tx_dfifo_a_valid =
             (state == ST_TX_CLAMING_BUS) ? (1'b1) :
             (state == ST_TX_INITDATA) ? (1'b1) :
             (state == ST_TX_BURST) ? (kl_tx_valid) : (1'b0);
+    wire tx_dfifo_a_short = (state == ST_TX_CLAMING_BUS);
     wire tx_dfifo_a_ready;
-    wire [31:0] tx_dfifo_b_data;
+    wire [21:0] tx_dfifo_b_data;
     wire tx_dfifo_b_valid;
     wire tx_dfifo_b_ready = ml_rxbr;
     assign kl_tx_ready = 
@@ -106,9 +105,10 @@ module ml_xcvr(
             ((state == ST_RX_HEADER) || (state == ST_RX_BURST)) ?
             (rx_dfifo_a_ready) : (ml_txbr_reg));
 
-    fifo_1d_64to32 tx_dfifo (
+    fifo_1d_64to22 tx_dfifo (
         .clk(clk),
         .rst(rst || tx_pending),
+        .a_short(tx_dfifo_a_short),
         .a_data(tx_dfifo_a_data),
         .a_valid(tx_dfifo_a_valid),
         .a_ready(tx_dfifo_a_ready),
@@ -118,7 +118,7 @@ module ml_xcvr(
     );
 
     reg kl_rx_valid_reg;
-    wire [31:0] rx_dfifo_a_data = ml_data_i;
+    wire [21:0] rx_dfifo_a_data = ml_data_i;
     wire rx_dfifo_a_valid = ((state == ST_RX_HEADER) || 
             (state == ST_RX_HEADERWAIT) || (state == ST_RX_BURST)) ? ml_rxbr :
             1'b0;
@@ -130,27 +130,26 @@ module ml_xcvr(
     assign kl_rx_data = (state == ST_RX_BURST) ? (rx_dfifo_b_data) : 64'bx;
     assign kl_rx_valid = (state == ST_RX_BURST) ? (rx_dfifo_b_valid) :
             kl_rx_valid_reg;
+    wire rx_dfifo_b_short = (state == ST_RX_HEADER);
 
-    fifo_1d_32to64 rx_dfifo (
+    fifo_1d_22to64 rx_dfifo (
         .clk(clk),
         .rst(rst),
         .a_data(rx_dfifo_a_data),
         .a_valid(rx_dfifo_a_valid),
         .a_ready(rx_dfifo_a_ready),
+        .b_short(rx_dfifo_b_short),
         .b_data(rx_dfifo_b_data),
         .b_valid(rx_dfifo_b_valid),
         .b_ready(rx_dfifo_b_ready)
     );
     
     /* verilator lint_off UNUSED */
-    wire [63:0] rx_header = rx_dfifo_b_data[63:0];
+    wire [41:0] rx_header = rx_dfifo_b_data[63:22];
     /* verilator lint_on UNUSED */
-    wire [2:0] rx_opcode = rx_header[62:60];
-    /* verilator lint_off UNUSED */
-    wire [3:0] rx_param = rx_header[59:56];
-    /* verilator lint_on UNUSED */
-    wire [2:0] rx_size = rx_header[55:53];
-    wire [4:0] rx_dstid = rx_header[52:48];
+    wire [1:0] rx_opcode = rx_header[41:40];
+    wire [2:0] rx_size = rx_header[39:37];
+    wire [4:0] rx_dstid = rx_header[36:32];
     wire [31:0] rx_addr = rx_header[31:0];
 
     always @(posedge clk) begin
@@ -180,7 +179,6 @@ module ml_xcvr(
                 // Accept the request
                 kl_tx_ready_reg <= 1'b0;
                 tx_opcode <= kl_tx_den ? `ML_OP_Data : `ML_OP_Dataless;
-                tx_param <= 4'b0;
                 tx_srcid <= kl_tx_id;
                 tx_size <= kl_tx_size;
                 tx_addr <= kl_tx_addr;
@@ -288,6 +286,7 @@ module ml_xcvr(
                 // RX done
                 ml_data_ie <= 1'b0;
                 kl_rx_valid_reg <= 1'b0;
+                kl_tx_ready_reg <= 1'b1;
                 state <= ST_IDLE;
             end
         end

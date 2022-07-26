@@ -43,8 +43,8 @@ module simtop(
 
     wire ml_abr;
     wire ml_bbr;
-    wire [31:0] ml_data_a2b;
-    wire [31:0] ml_data_b2a;
+    wire [21:0] ml_data_a2b;
+    wire [21:0] ml_data_b2a;
     wire ml_a_data_oe;
     wire ml_b_data_oe;
     wire explosion = ml_a_data_oe && ml_b_data_oe;
@@ -94,7 +94,6 @@ module simtop(
         .b_ready(bus_req_ready)
     );
 
-    wire [31:0] sideband_tx;
     ml2kl_bridge ml2kl_bridge(
         .clk(clk),
         .rst(rst),
@@ -118,15 +117,8 @@ module simtop(
         .ml_data_i(ml_data_a2b),
         .ml_data_oe(ml_b_data_oe),
         /* verilator lint_off PINCONNECTEMPTY */
-        .ml_data_ie(),
+        .ml_data_ie()
         /* verilator lint_on PINCONNECTEMPTY */
-        .sideband(sideband_tx)
     );
-
-    reg [7:0] clkdiv;
-    always @(posedge clk)
-        clkdiv <= clkdiv + 1;
-
-    assign sideband_tx = {31'b0, clkdiv[7]};
 
 endmodule

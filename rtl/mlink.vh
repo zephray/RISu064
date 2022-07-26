@@ -21,6 +21,6 @@
 // SOFTWARE.
 //
 
-`define ML_OP_Data          3'd1
-`define ML_OP_Dataless      3'd2
-`define ML_OP_Atomic        3'd3
+`define ML_OP_Data          2'd1
+`define ML_OP_Dataless      2'd2
+`define ML_OP_Atomic        2'd3

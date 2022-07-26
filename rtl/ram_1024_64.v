@@ -38,8 +38,7 @@ module ram_1024_64(
 
     always @(posedge clk) begin
         if (!rst) begin
-            // R with W to R bypassing
-            rd <= (we && (waddr == raddr)) ? (wr) : (mem[raddr]);
+            rd <= mem[raddr];
             // W
             if (we) begin
                 mem[waddr] <= wr;

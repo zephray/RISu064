@@ -22,7 +22,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-`include "defines.vh"
 
 module l1cache(
     input  wire         clk,
@@ -285,8 +284,8 @@ module l1cache(
             (p2_cache_comparator[0]) ? (p2_cache_data_rd[0]) :
             (p2_cache_comparator[1]) ? (p2_cache_data_rd[1]) : (64'bx);
     assign cache_int_ready =
-            ((cache_state == STATE_PREPARE) || (cache_state == STATE_READY) ||
-            (cache_state == STATE_RETRY)) && !p2_cache_miss;
+            ((cache_state == STATE_PREPARE) || (cache_state == STATE_READY)) &&
+            !p2_cache_miss;
     assign core_resp_rdata = cache_int_ready ? (p2_core_resp_rdata) : (64'bx);
     assign core_resp_valid = cache_int_ready ? (p2_core_resp_valid) : (1'b0);
 
@@ -436,13 +435,7 @@ module l1cache(
             cache_state <= STATE_RETRY;
         end
         STATE_RETRY: begin
-            // Essentially same as STATE_PREPARE, but consider output as
-            // valid
-            p2_core_req_addr <= core_req_addr;
-            p2_core_req_wen <= core_req_wen;
-            p2_core_req_wdata <= core_req_wdata;
-            p2_core_req_wmask <= core_req_wmask;
-            p2_core_req_valid <= core_req_valid;
+            // Essentially a wait state
             cache_state <= STATE_READY;
         end
         endcase

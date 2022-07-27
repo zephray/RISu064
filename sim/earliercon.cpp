@@ -42,7 +42,7 @@ void Earliercon::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata,
         if ((addr == base) && (wmask & 0x1)) {
             if (we) {
                 ready = 1;
-                printf("%c", (char)(wdata & 0xff));
+                fprintf(stderr, "%c", (char)(wdata & 0xff));
             }
         }
     }

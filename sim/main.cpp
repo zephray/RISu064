@@ -40,7 +40,7 @@
 #include "earliercon.h"
 
 #define RAM_BASE 0x80000000
-#define RAM_SIZE 64*1024
+#define RAM_SIZE 1*1024*1024
 
 #define CON_BASE 0x20000000
 
@@ -142,7 +142,7 @@ void tick() {
         core->db_req_valid,
         db_resp_valid
     );
-    /*earliercon->apply(
+    earliercon->apply(
         core->db_req_addr,
         db_resp_rdata,
         core->db_req_wdata,
@@ -150,7 +150,7 @@ void tick() {
         core->db_req_wen,
         core->db_req_valid,
         db_resp_valid
-    );*/
+    );
 
     core->clk = 1;
     core->eval();

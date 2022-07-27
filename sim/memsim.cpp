@@ -78,7 +78,7 @@ uint64_t Memsim::bytemask_to_bitmask(uint8_t mask) {
     uint64_t result = 0;
     for (int i = 0; i < 8; i++) {
         if (mask & 0x01)
-            result |= 0xff << (i * 8);
+            result |= 0xffull << (i * 8);
         mask >>= 1;
     }
     return result;
@@ -114,8 +114,10 @@ void Memsim::apply(uint64_t addr, uint64_t &rdata, uint64_t wdata,
                 uint64_t bitmask = bytemask_to_bitmask(req_wmask);
                 mem[raddr] &= ~bitmask;
                 mem[raddr] |= req_wdata & bitmask;
+                //printf("Memory %08lx updated to %016lx BM %016lx\n", raddr, mem[raddr], bitmask);
             }
             else {
+                //printf("Memory %08lx readout as %016lx\n", raddr, mem[raddr]);
                 rdata = mem[raddr];
                 if (verbose)
                     printf("Memory %08lx R %016lx\n", req_addr, rdata);

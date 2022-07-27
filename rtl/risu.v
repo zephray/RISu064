@@ -49,7 +49,7 @@ module risu(
     input  wire         extint_external
 );
 
-    parameter USE_L1_CACHE = 1'b1;
+    parameter USE_L1_CACHE = 1'b0;
 
     // Signals from CPU
     wire [31:0] im_req_addr;

@@ -68,9 +68,6 @@
 `define OP_INTREGW  7'b0111011
 `define OP_FENCE    7'b0001111
 `define OP_ENVCSR   7'b1110011
-// RV-M
-`define OP_MULDIV   7'b0110011
-`define OP_MULDIVW  7'b0111011
 // RV-F / RV-D
 `define OP_FLOAD    7'b0000111
 `define OP_FSTORE   7'b0100111
@@ -99,7 +96,7 @@
 `define OT_LOAD         3'd2
 `define OT_STORE        3'd3
 `define OT_FENCE        3'd4
-`define OT_MUL          3'd5
+`define OT_MULDIV       3'd5
 `define OT_TRAP         3'd6
 `define OT_FP           3'd7
 
@@ -120,13 +117,34 @@
 // Branch conditions
 `define BC_EQ           3'd0
 `define BC_NE           3'd1
-`define BC_LT           3'd2
-`define BC_GE           3'd3
-`define BC_LTU          3'd4
-`define BC_GEU          3'd5
+`define BC_LT           3'd4
+`define BC_GE           3'd5
+`define BC_LTU          3'd6
+`define BC_GEU          3'd7
 
 `define BB_PC           1'b0
 `define BB_RS1          1'b1
+
+// Multiplication
+`define MO_MUL          3'd0
+`define MO_MULH         3'd1
+`define MO_MULHSU       3'd2
+`define MO_MULHU        3'd3
+`define MO_MULW         3'd4
+
+// Divide
+`define DO_DIV          3'd0
+`define DO_DIVU         3'd1
+`define DO_REM          3'd2
+`define DO_REMU         3'd3
+`define DO_DIVW         3'd4
+`define DO_DIVUW        3'd5
+`define DO_REMW         3'd6
+`define DO_REMUW        3'd7
+
+// MulDiv Operation Type
+`define MD_MUL          1'd0
+`define MD_DIV          1'd1
 
 // CSR operations
 `define CSR_RW          2'd1

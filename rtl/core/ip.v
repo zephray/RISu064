@@ -84,8 +84,15 @@ module ip(
                 && (!br_correct);
         wire [63:0] ip_if_new_pc_comb = br_target;
         always @(posedge clk) begin
-            ip_if_pc_override <= ip_if_pc_override_comb;
-            ip_if_new_pc <= ip_if_new_pc_comb;
+            if (ip_if_pc_override) begin
+                // A previous taken mispredicted branch means the second branch
+                // should be flushed away
+                ip_if_pc_override <= 1'b0;
+            end
+            else begin
+                ip_if_pc_override <= ip_if_pc_override_comb;
+                ip_if_new_pc <= ip_if_new_pc_comb;
+            end
         end
     end
     endgenerate

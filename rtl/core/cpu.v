@@ -142,6 +142,8 @@ module cpu(
     wire        dec_ix_mret;
     wire        dec_ix_intr;
     wire [3:0]  dec_ix_cause;
+    wire [2:0]  dec_ix_md_op;
+    wire        dec_ix_muldiv;
     wire [1:0]  dec_ix_operand1;
     wire [1:0]  dec_ix_operand2;
     wire [63:0] dec_ix_imm;
@@ -181,11 +183,13 @@ module cpu(
         .dec_ix_csr_op(dec_ix_csr_op),
         .dec_ix_mret(dec_ix_mret),
         .dec_ix_intr(dec_ix_intr),
+        .dec_ix_md_op(dec_ix_md_op),
+        .dec_ix_muldiv(dec_ix_muldiv),
         .dec_ix_cause(dec_ix_cause),
+        .dec_ix_op_type(dec_ix_op_type),
         .dec_ix_operand1(dec_ix_operand1),
         .dec_ix_operand2(dec_ix_operand2),
         .dec_ix_imm(dec_ix_imm),
-        .dec_ix_op_type(dec_ix_op_type),
         .dec_ix_legal(dec_ix_legal),
         .dec_ix_wb_en(dec_ix_wb_en),
         .dec_ix_rs1(dec_ix_rs1),
@@ -239,6 +243,16 @@ module cpu(
     wire        lsp_wb_wb_en;
     wire        lsp_wb_valid;
     wire        lsp_wb_ready;
+    wire [63:0] ix_md_pc;
+    wire [4:0]  ix_md_dst;
+    wire [63:0] ix_md_operand1;
+    wire [63:0] ix_md_operand2;
+    wire [2:0]  ix_md_md_op;
+    wire        ix_md_muldiv;
+    wire        ix_md_valid;
+    wire        ix_md_ready;
+    wire [4:0]  md_ix_dst;
+    wire        md_ix_active;
     wire [63:0] ix_trap_pc;
     wire [4:0]  ix_trap_dst;
     wire [1:0]  ix_trap_csr_op;
@@ -277,10 +291,12 @@ module cpu(
         .dec_ix_mret(dec_ix_mret),
         .dec_ix_intr(dec_ix_intr),
         .dec_ix_cause(dec_ix_cause),
+        .dec_ix_md_op(dec_ix_md_op),
+        .dec_ix_muldiv(dec_ix_muldiv),
+        .dec_ix_op_type(dec_ix_op_type),
         .dec_ix_operand1(dec_ix_operand1),
         .dec_ix_operand2(dec_ix_operand2),
         .dec_ix_imm(dec_ix_imm),
-        .dec_ix_op_type(dec_ix_op_type),
         .dec_ix_legal(dec_ix_legal),
         .dec_ix_wb_en(dec_ix_wb_en),
         .dec_ix_rs1(dec_ix_rs1),
@@ -335,6 +351,18 @@ module cpu(
         .lsp_wb_result(lsp_wb_result),
         .lsp_wb_wb_en(lsp_wb_wb_en),
         .lsp_wb_valid(lsp_wb_valid),
+        // To muldiv unit
+        .ix_md_pc(ix_md_pc),
+        .ix_md_dst(ix_md_dst),
+        .ix_md_operand1(ix_md_operand1),
+        .ix_md_operand2(ix_md_operand2),
+        .ix_md_md_op(ix_md_md_op),
+        .ix_md_muldiv(ix_md_muldiv),
+        .ix_md_valid(ix_md_valid),
+        .ix_md_ready(ix_md_ready),
+        // Hazard detection
+        .md_ix_dst(md_ix_dst),
+        .md_ix_active(md_ix_active),
         // To trap unit
         .ix_trap_pc(ix_trap_pc),
         .ix_trap_dst(ix_trap_dst),
@@ -474,6 +502,34 @@ module cpu(
         .trap_if_new_pc(trap_if_new_pc)
     );
 
+    wire [4:0]  md_wb_dst;
+    wire [63:0] md_wb_result;
+    wire [63:0] md_wb_pc;
+    wire        md_wb_valid;
+    md md(
+        .clk(clk),
+        .rst(rst),
+        // To Issue
+        .ix_md_pc(ix_md_pc),
+        .ix_md_dst(ix_md_dst),
+        .ix_md_operand1(ix_md_operand1),
+        .ix_md_operand2(ix_md_operand2),
+        .ix_md_md_op(ix_md_md_op),
+        .ix_md_muldiv(ix_md_muldiv),
+        .ix_md_valid(ix_md_valid),
+        .ix_md_ready(ix_md_ready),
+        // Hazard detection
+        .md_ix_dst(md_ix_dst),
+        .md_ix_active(md_ix_active),
+        // To writeback
+        .md_wb_dst(md_wb_dst),
+        .md_wb_result(md_wb_result),
+        .md_wb_pc(md_wb_pc),
+        .md_wb_valid(md_wb_valid),
+        // This unit doesn't support stall
+        .md_abort(pipe_flush)
+    );
+
     wb wb(
         .clk(clk),
         .rst(rst),
@@ -495,6 +551,11 @@ module cpu(
         .lsp_wb_wb_en(lsp_wb_wb_en),
         .lsp_wb_valid(lsp_wb_valid),
         .lsp_wb_ready(lsp_wb_ready),
+        // From muldiv unit
+        .md_wb_dst(md_wb_dst),
+        .md_wb_result(md_wb_result),
+        .md_wb_pc(md_wb_pc),
+        .md_wb_valid(md_wb_valid),
         // From trap unit
         .trap_wb_dst(trap_wb_dst),
         .trap_wb_result(trap_wb_result),

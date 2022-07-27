@@ -50,10 +50,12 @@ module ix(
     input  wire         dec_ix_mret,
     input  wire         dec_ix_intr,
     input  wire [3:0]   dec_ix_cause,
+    input  wire [2:0]   dec_ix_md_op,
+    input  wire         dec_ix_muldiv,
+    input  wire [2:0]   dec_ix_op_type,
     input  wire [1:0]   dec_ix_operand1,
     input  wire [1:0]   dec_ix_operand2,
     input  wire [63:0]  dec_ix_imm,
-    input  wire [2:0]   dec_ix_op_type,
     input  wire         dec_ix_legal,
     input  wire         dec_ix_wb_en,
     input  wire [4:0]   dec_ix_rs1,
@@ -108,6 +110,18 @@ module ix(
     input  wire [63:0]  lsp_wb_result,
     input  wire         lsp_wb_wb_en,
     input  wire         lsp_wb_valid,
+    // To muldiv unit
+    output reg  [63:0]  ix_md_pc,
+    output reg  [4:0]   ix_md_dst,
+    output reg  [63:0]  ix_md_operand1,
+    output reg  [63:0]  ix_md_operand2,
+    output reg  [2:0]   ix_md_md_op,
+    output reg          ix_md_muldiv,
+    output reg          ix_md_valid,
+    input  wire         ix_md_ready,
+    // Hazard detection
+    input  wire [4:0]   md_ix_dst,
+    input  wire         md_ix_active,
     // To trap unit
     output reg  [63:0]  ix_trap_pc,
     output reg  [4:0]   ix_trap_dst,
@@ -154,6 +168,8 @@ module ix(
     reg dbg_stl_lag [0:1];
     reg dbg_stl_lma [0:1];
     reg dbg_fwd_lwb [0:1];
+    reg dbg_stl_mdi [0:1];
+    reg dbg_stl_mda [0:1];
     /* verilator lint_on UNUSED */
     genvar i;
     generate
@@ -165,6 +181,8 @@ module ix(
                 dbg_stl_lag[i] = 1'b0;
                 dbg_stl_lma[i] = 1'b0;
                 dbg_fwd_lwb[i] = 1'b0;
+                dbg_stl_mdi[i] = 1'b0;
+                dbg_stl_mda[i] = 1'b0;
 
                 rs_ready[i] = 1'b1;
                 // Register read
@@ -205,6 +223,16 @@ module ix(
                     rs_ready[i] = 1'b0;
                     dbg_stl_lag[i] = 1'b1;
                 end
+                // Stall point: MD issue
+                if (ix_md_valid && (ix_md_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b0;
+                    dbg_stl_mdi[i] = 1'b1;
+                end
+                // Stall point: MD active
+                if (md_ix_active && (md_ix_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b0;
+                    dbg_stl_mda[i] = 1'b1;
+                end
 
                 // Always override to 0 in case write to 0 forwarding is valid
                 if (rf_rsrc[i] == 5'd0) begin
@@ -223,7 +251,9 @@ module ix(
             (!ip_ex_ixstalled || (ix_ip_dst != dec_ix_rd)) &&
             (!lsp_wb_active || (lsp_wb_dst != dec_ix_rd)) &&
             (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec_ix_rd)) &&
-            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd)));
+            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd))) &&
+            (!ix_md_valid || (ix_md_dst != dec_ix_rd)) &&
+            (!md_ix_active || (md_ix_dst != dec_ix_rd));
 
     wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
     wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
@@ -245,17 +275,16 @@ module ix(
     wire int_pending = (trap_ix_ip != 16'd0);
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
     wire ix_opr_ready = operand1_ready && operand2_ready && dst_ready;
-    wire ix_issue_ip0 = (dec_ix_valid) && (ix_opr_ready) &&
-            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
-            (ix_ip_ready) && !pipe_flush && !trap_ongoing && !int_pending &&
-            !exc_pending;
-    wire ix_issue_lsp = (dec_ix_valid) && (ix_opr_ready) &&
-            ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE)) &&
-            (ix_lsp_ready) && !pipe_flush && !trap_ongoing && !int_pending &&
-            !exc_pending;
-    wire ix_issue_trap = (dec_ix_valid) && (ix_opr_ready) &&
-            (dec_ix_op_type == `OT_TRAP) && ix_barrier_done && !pipe_flush &&
+    wire ix_issue_common = (dec_ix_valid) && (ix_opr_ready) && !pipe_flush  &&
             !trap_ongoing && !int_pending && !exc_pending;
+    wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) &&
+            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
+    wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) &&
+            ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
+    wire ix_issue_md = ix_issue_common && (ix_md_ready) &&
+            (dec_ix_op_type == `OT_MULDIV);
+    wire ix_issue_trap = ix_issue_common && !trap_ongoing &&
+            (dec_ix_op_type == `OT_TRAP) && ix_barrier_done; 
     // Wait for LS pipe to finish
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
     reg ix_fencei_done = 1'b0;
@@ -268,7 +297,7 @@ module ix(
     wire ix_barrier_done = ix_fenced_done && ix_ibarrier_done;
     wire ix_issue =
             // Instructions to pipes
-            ix_issue_ip0 || ix_issue_lsp || ix_issue_trap ||
+            ix_issue_ip0 || ix_issue_lsp || ix_issue_md || ix_issue_trap ||
             // Fake instruction for fence/ barrier
             ix_fence_done;
 
@@ -323,7 +352,7 @@ module ix(
             ix_ip_pc <= dec_ix_pc;
             ix_ip_valid <= 1'b1;
         end
-        else if (ix_ip_ready) begin
+        else if (ix_ip_ready || pipe_flush) begin
             ix_ip_valid <= 1'b0;
         end
         if (ix_issue_lsp) begin
@@ -337,9 +366,23 @@ module ix(
             ix_lsp_pc <= dec_ix_pc;
             ix_lsp_valid <= 1'b1;
         end
-        else if (ix_lsp_ready) begin
+        else if (ix_lsp_ready || pipe_flush) begin
             ix_lsp_valid <= 1'b0;
         end
+        if (ix_issue_md) begin
+            ix_md_pc <= dec_ix_pc;
+            ix_md_dst <= dec_ix_rd;
+            ix_md_operand1 <= operand1_value;
+            ix_md_operand2 <= operand2_value;
+            ix_md_md_op <= dec_ix_md_op;
+            ix_md_muldiv <= dec_ix_muldiv;
+            ix_md_valid <= 1'b1;
+        end
+        else if (ix_md_ready || pipe_flush) begin
+            ix_md_valid <= 1'b0;
+        end
+        // Trap waits for all preceeding instructions to complete and blocks all
+        // proceeding instructions, so it shouldn't be affected by pipe flush
         if (ix_issue_trap) begin
             ix_trap_pc <= dec_ix_pc;
             ix_trap_dst <= dec_ix_rd;
@@ -393,6 +436,7 @@ module ix(
         if (rst) begin
             ix_ip_valid <= 1'b0;
             ix_lsp_valid <= 1'b0;
+            ix_md_valid <= 1'b0;
             ix_trap_valid <= 1'b0;
             trap_ongoing <= 1'b0;
         end

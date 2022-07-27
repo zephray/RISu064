@@ -54,10 +54,12 @@ module dec(
     output reg          dec_ix_mret,
     output reg          dec_ix_intr,
     output reg  [3:0]   dec_ix_cause,
+    output reg  [2:0]   dec_ix_md_op,
+    output reg          dec_ix_muldiv,
+    output reg  [2:0]   dec_ix_op_type,
     output reg  [1:0]   dec_ix_operand1,
     output reg  [1:0]   dec_ix_operand2,
     output reg  [63:0]  dec_ix_imm,
-    output reg  [2:0]   dec_ix_op_type,
     output reg          dec_ix_legal,
     output reg          dec_ix_wb_en,
     output reg  [4:0]   dec_ix_rs1,
@@ -81,6 +83,8 @@ module dec(
     wire dec_mret;
     wire dec_intr;
     wire [3:0] dec_cause;
+    wire [2:0] dec_md_op;
+    wire dec_muldiv;
     wire [2:0] dec_op_type;
     wire [1:0] dec_operand1;
     wire [1:0] dec_operand2;
@@ -106,6 +110,8 @@ module dec(
         .mret(dec_mret),
         .intr(dec_intr),
         .cause(dec_cause),
+        .md_op(dec_md_op),
+        .muldiv(dec_muldiv),
         .op_type(dec_op_type),
         .operand1(dec_operand1),
         .operand2(dec_operand2),
@@ -150,10 +156,12 @@ module dec(
             dec_ix_mret <= dec_mret;
             dec_ix_intr <= dec_intr;
             dec_ix_cause <= dec_cause;
+            dec_ix_md_op <= dec_md_op;
+            dec_ix_muldiv <= dec_muldiv;
+            dec_ix_op_type <= dec_op_type;
             dec_ix_operand1 <= dec_operand1;
             dec_ix_operand2 <= dec_operand2;
             dec_ix_imm <= dec_imm;
-            dec_ix_op_type <= dec_op_type;
             dec_ix_legal <= dec_legal;
             dec_ix_wb_en <= dec_wb_en;
             dec_ix_rs1 <= dec_rs1;

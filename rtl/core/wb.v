@@ -51,6 +51,13 @@ module wb(
     input  wire         lsp_wb_wb_en,
     input  wire         lsp_wb_valid,
     output wire         lsp_wb_ready,
+    // From muldiv unit
+    input  wire [4:0]   md_wb_dst,
+    input  wire [63:0]  md_wb_result,
+    /* verilator lint_off UNUSED */
+    input  wire [63:0]  md_wb_pc,
+    /* verilator lint_on UNUSED */
+    input  wire         md_wb_valid,
     // From trap unit
     input  wire [4:0]   trap_wb_dst,
     input  wire [63:0]  trap_wb_result,
@@ -67,32 +74,37 @@ module wb(
     // Writeback
     wire ip_wb_req = ip_wb_valid && ip_wb_wb_en;
     wire lsp_wb_req = lsp_wb_valid && lsp_wb_wb_en;
+    wire md_wb_req = md_wb_valid;
     wire trap_wb_req = trap_wb_valid && trap_wb_wb_en;
     // Retire without writeback
     wire ip_rwowb_req = ip_wb_valid && !ip_wb_wb_en;
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
-    // Current priority: lsp > ip > trap. Though trap shouldn't have collision
-    // with other types
-    wire ip_wb_ac = !lsp_wb_ac && ip_wb_req;
-    wire lsp_wb_ac = lsp_wb_req;
-    wire trap_wb_ac = !ip_wb_ac && trap_wb_req;
+    // Current priority: md >>lsp > ip > trap. Though trap shouldn't have
+    // collision with other types
+    wire md_wb_ac = md_wb_req;
+    wire lsp_wb_ac = !md_wb_ac && lsp_wb_req;
+    wire ip_wb_ac = (!md_wb_ac && !lsp_wb_ac) && ip_wb_req;
+    wire trap_wb_ac = (!md_wb_ac && !lsp_wb_ac && !ip_wb_ac) && trap_wb_req;
 
-    wire wb_active = ip_wb_ac || lsp_wb_ac || trap_wb_ac;
+    wire wb_active = ip_wb_ac || lsp_wb_ac || md_wb_ac || trap_wb_ac;
     wire [4:0] wb_dst =
             (ip_wb_ac) ? ip_wb_dst :
             (lsp_wb_ac) ? lsp_wb_dst :
+            (md_wb_ac) ? md_wb_dst :
             (trap_wb_ac) ? trap_wb_dst: 5'bx;
     wire [63:0] wb_value =
             (ip_wb_ac) ? ip_wb_result :
             (lsp_wb_ac) ? lsp_wb_result :
+            (md_wb_ac) ? md_wb_result :
             (trap_wb_ac) ? trap_wb_result : 64'bx;
 
     `ifdef VERBOSE
     wire [63:0] wb_pc =
             (ip_wb_ac) ? ip_wb_pc :
             (lsp_wb_ac) ? lsp_wb_pc :
+            (md_wb_ac) ? md_wb_pc :
             (trap_wb_ac) ? trap_wb_pc : 64'bx;
     always @(posedge clk) begin
         begin
@@ -124,17 +136,20 @@ module wb(
     // Instruction retire count
     reg ip_retire;
     reg lsp_retire;
+    reg md_retire;
     reg trap_retire;
     always @(posedge clk) begin
         ip_retire <= (ip_wb_valid && ip_wb_ready);
         lsp_retire <= (lsp_wb_valid && lsp_wb_ready);
+        md_retire <= md_wb_ac;
         trap_retire <= (trap_wb_valid && trap_wb_ready);
         if (rst) begin
             ip_retire <= 1'b0;
             lsp_retire <= 1'b0;
+            md_retire <= 1'b0;
             trap_retire <= 1'b0;
         end
     end
-    assign wb_trap_instret = ip_retire + lsp_retire + trap_retire;
+    assign wb_trap_instret = ip_retire + lsp_retire + md_retire + trap_retire;
 
 endmodule

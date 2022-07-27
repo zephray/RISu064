@@ -43,6 +43,9 @@ module du(
     output reg mret,
     output reg intr,
     output reg [3:0] cause,
+    // Decoder output specific for MulDiv unit
+    output reg [2:0] md_op,
+    output reg muldiv,
     // Decoder common output
     output reg [2:0] op_type,
     output reg [1:0] operand1,
@@ -147,24 +150,34 @@ module du(
                 legal = 1'b0;
         end
         `OP_INTREG: begin
-            op_type = `OT_INT;
-            op = {1'b0, funct3};
-            option = funct7[5];
-            operand1 = `D_OPR1_RS1;
-            operand2 = `D_OPR2_RS2;
-            br_type = `BT_NONE;
-            truncate = 1'b0;
-            wb_en = 1'b1;
-            legal = 1'b1;
-            if ((funct3 != 3'b000) && (funct3 != 3'b101)) begin
-                if (funct7 != 7'b0)
-                    legal = 1'b0;
+            if (funct7 == 7'b0000001) begin
+                op_type = `OT_MULDIV;
+                operand1 = `D_OPR1_RS1;
+                operand2 = `D_OPR2_RS2;
+                md_op = {1'b0, funct3[1:0]};
+                muldiv = funct3[2];
+                wb_en = 1'b1;
+                legal = 1'b1;
             end
             else begin
-                if ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0))
-                    legal = 1'b0;
+                op_type = `OT_INT;
+                op = {1'b0, funct3};
+                option = funct7[5];
+                operand1 = `D_OPR1_RS1;
+                operand2 = `D_OPR2_RS2;
+                br_type = `BT_NONE;
+                truncate = 1'b0;
+                wb_en = 1'b1;
+                legal = 1'b1;
+                if ((funct3 != 3'b000) && (funct3 != 3'b101)) begin
+                    if (funct7 != 7'b0)
+                        legal = 1'b0;
+                end
+                else begin
+                    if ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0))
+                        legal = 1'b0;
+                end
             end
-
         end
         `OP_INTIMMW: begin
             op_type = `OT_INT;
@@ -193,26 +206,38 @@ module du(
             end
         end
         `OP_INTREGW: begin
-            op_type = `OT_INT;
-            op = {1'b0, funct3};
-            option = funct7[5];
-            operand1 = `D_OPR1_RS1;
-            operand2 = `D_OPR2_RS2;
-            br_type = `BT_NONE;
-            truncate = 1'b1;
-            wb_en = 1'b1;
-            legal = 1'b1;
-            if ((funct3 == 3'b000) || (funct3 == 3'b101)) begin
-                if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
-                    legal = 1'b0;
-            end
-            else if (funct3 == 3'b001) begin
-                if (funct7 != 7'b0)
-                    legal = 1'b0;
+            if (funct7 == 7'b0000001) begin
+                op_type = `OT_MULDIV;
+                operand1 = `D_OPR1_RS1;
+                operand2 = `D_OPR2_RS2;
+                md_op = {1'b1, funct3[1:0]};
+                muldiv = funct3[2];
+                wb_en = 1'b1;
+                legal = ((funct3 != 3'b001) && (funct3 != 3'b010) &&
+                        (funct3 != 3'b011));
             end
             else begin
-                // 32-bit multiplications
-                legal = 1'b0;
+                op_type = `OT_INT;
+                op = {1'b0, funct3};
+                option = funct7[5];
+                operand1 = `D_OPR1_RS1;
+                operand2 = `D_OPR2_RS2;
+                br_type = `BT_NONE;
+                truncate = 1'b1;
+                wb_en = 1'b1;
+                legal = 1'b1;
+                if ((funct3 == 3'b000) || (funct3 == 3'b101)) begin
+                    if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
+                        legal = 1'b0;
+                end
+                else if (funct3 == 3'b001) begin
+                    if (funct7 != 7'b0)
+                        legal = 1'b0;
+                end
+                else begin
+                    // 32-bit multiplications
+                    legal = 1'b0;
+                end
             end
         end
         // Branching instructions, executed by integer pipe
@@ -360,16 +385,12 @@ module du(
             wb_en = 1'b0;
             legal = 1'b1;
         end*/
-
-        endcase
-
-        // RV-M
-
         // RV-A
 
         // RV-F
 
         // RV-D
+        endcase
 
         // Handling illegal instruction
         if (!legal) begin

@@ -60,7 +60,8 @@ module ifp(
     wire [63:0] btb_result = 64'bx;
 
     wire ifp_stalled_memory_resp = (f2_dec_req_valid && !im_resp_valid) && !rst;
-    wire ifp_stalled_back_pressure = (!if_dec_ready) && !rst;
+    wire ifp_stalled_back_pressure = (fifo_bp && !if_dec_ready) && !rst;
+    //wire ifp_stalled_back_pressure = (!if_dec_ready) && !rst;
     wire ifp_stalled = ifp_stalled_memory_resp || ifp_stalled_back_pressure;
     reg ifp_stalled_last;
     wire [63:0] ifp_new_pc;
@@ -134,17 +135,19 @@ module ifp(
             im_resp_rdata[31:0];
 
     // Output buffering
+    wire fifo_bp;
     wire fifo_valid;
     wire if_dec_pc_override;
     wire if_dec_pc_override_late;
     fifo_2d_fwft #(.WIDTH(163)) if_fifo (
         .clk(clk),
-        .rst(rst),
+        .rst(rst || ifp_pc_override),
         .a_data({im_instr, f2_dec_pc, f2_dec_bp, f2_dec_bt, f2_dec_pc_override, ifp_pc_override}),
         .a_valid(im_resp_valid),
         /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
         /* verilator lint_on PINCONNECTEMPTY */
+        .a_almost_full(fifo_bp),
         .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override, if_dec_pc_override_late}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)

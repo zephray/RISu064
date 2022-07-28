@@ -97,13 +97,13 @@ module md(
             (mul_resp_valid) : (div_resp_valid);
     assign md_wb_valid = md_wb_valid_int && !abort_requested;
 
-    // Abortion is only valid the first cycle it started.
+    // Abortion is only valid the 0th and 1st cycle it started.
     reg abort_valid;
     reg abort_requested;
 
     always @(posedge clk) begin
         if (!active) begin
-            if (ix_md_valid && ix_md_ready) begin
+            if (ix_md_valid && ix_md_ready && !md_abort) begin
                 active <= 1'b1;
                 abort_valid <= 1'b1;
                 active_unit <= req_unit;

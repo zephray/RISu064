@@ -28,6 +28,7 @@ module fifo_2d_fwft (
     input  wire [WIDTH-1:0] a_data,
     input  wire             a_valid,
     output wire             a_ready,
+    output wire             a_almost_full,
     output wire [WIDTH-1:0] b_data,
     output wire             b_valid,
     input  wire             b_ready
@@ -39,50 +40,55 @@ module fifo_2d_fwft (
     reg [WIDTH-1:0] fifo_bottom;
     reg fifo_empty;
     reg fifo_full;
+    reg [1:0] rd_ptr;
+    reg [1:0] wr_ptr;
     always @(posedge clk) begin
+        if (a_ready && a_valid) begin
+            fifo_top <= a_data;
+            fifo_bottom <= fifo_top;
+            if (!b_ready) begin
+                // Enqueue
+                if (fifo_empty) begin
+                    rd_ptr <= 2'd1;
+                    fifo_empty <= 1'b0;
+                end
+                else if (fifo_full) begin
+                    // Cry
+                    $display("IF FIFO overflow!");
+                end
+                else begin
+                    rd_ptr <= 2'd2;
+                    fifo_full <= 1'b1;
+                end
+            end
+            else begin
+                // Data coming in and out normally
+            end
+        end
+        else if (b_ready) begin
+            // Dequeue
+            if (fifo_empty) begin
+                // Cry
+            end
+            else if (fifo_full) begin
+                fifo_full <= 1'b0;
+                rd_ptr <= 2'd1;
+            end
+            else begin
+                fifo_empty <= 1'b1;
+                rd_ptr <= 2'd0;
+            end
+        end
         if (rst) begin
             fifo_full <= 1'b0;
             fifo_empty <= 1'b1;
-        end
-        else begin
-            if (a_ready && a_valid) begin
-                if (!b_ready) begin
-                    // Enqueue
-                    if (fifo_empty) begin
-                        fifo_top <= a_data;
-                        fifo_empty <= 1'b0;
-                    end
-                    else if (fifo_full) begin
-                        // Cry
-                    end
-                    else begin
-                        fifo_bottom <= fifo_top;
-                        fifo_top <= a_data;
-                        fifo_full <= 1'b1;
-                    end
-                end
-                else begin
-                    // Data coming in and out normally
-                    fifo_top <= a_data;
-                end
-            end
-            else if (b_ready) begin
-                // Dequeue
-                if (fifo_empty) begin
-                    // Cry
-                end
-                else if (fifo_full) begin
-                    fifo_top <= fifo_bottom;
-                    fifo_full <= 1'b0;
-                end
-                else begin
-                    fifo_empty <= 1'b1;
-                end
-            end
+            rd_ptr <= 2'd0;
         end
     end
     assign b_valid = !fifo_empty || a_valid;
-    assign b_data = fifo_empty ? a_data : fifo_top;
+    assign b_data = (rd_ptr == 2'd0) ? a_data :
+            (rd_ptr == 2'd1) ? fifo_top : fifo_bottom;
     assign a_ready = !fifo_full;
+    assign a_almost_full = !fifo_empty;
 
 endmodule

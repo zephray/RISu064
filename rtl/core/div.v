@@ -33,8 +33,9 @@ module div(
     input  wire [2:0]   div_op,
     input  wire         req_valid,
     output wire         req_ready,
+    output reg  [63:0]  resp_result,
     output reg          resp_valid,
-    output reg  [63:0]  resp_result
+    input  wire         resp_ready
 );
 
     // Comb signals of pre-processed inputs
@@ -47,7 +48,6 @@ module div(
     wire op_unsigned = div_op[0];
     wire op_rem = div_op[1];
     reg op_rem_reg;
-    wire op_word = div_op[2];
     reg op_word_reg;
 
     wire a_signbit = (op_word) ? operand1[31] : operand1[63];
@@ -58,6 +58,9 @@ module div(
     wire [63:0] b_ext = (op_word) ? {{32{b_sign}}, operand2[31:0]} : operand2;
     assign a_mag = (a_sign) ? (-a_ext) : (a_ext);
     assign b_mag = (b_sign) ? (-b_ext) : (b_ext);
+
+    wire op_word = div_op[2] ||
+            ((a_mag[63:32] == 32'b0) && (b_mag[63:32] == 32'b0));
 
     wire [31:0] a_rev_32;
     wire [63:0] a_rev_64; 
@@ -84,13 +87,15 @@ module div(
             ((rem_neg) ? (-rem) : (rem)) :
             ((quo_neg) ? (-quo) : (quo));
 
-    assign req_ready = state == ST_IDLE;
+    assign req_ready = (state == ST_IDLE) &&
+            (!resp_valid || (resp_valid && resp_ready));
 
     always @(posedge clk) begin
         case (state)
         ST_IDLE: begin
-            resp_valid <= 1'b0;
-            if (req_valid) begin
+            if (resp_valid && resp_ready)
+                resp_valid <= 1'b0;
+            if (req_ready && req_valid) begin
                 state <= ST_CALCULATE;
                 loop <= op_word ? 31 : 63;
                 quo <= 64'd0;

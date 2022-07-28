@@ -44,6 +44,7 @@ module md(
     output wire [63:0]  md_wb_result,
     output wire [63:0]  md_wb_pc,
     output wire         md_wb_valid,
+    input  wire         md_wb_ready,
     // Pipeline flush
     input  wire         md_abort
 );
@@ -63,10 +64,11 @@ module md(
         .operand1(ix_md_operand1),
         .operand2(ix_md_operand2),
         .mul_op(ix_md_md_op),
-        .req_valid(ix_md_valid && (ix_md_muldiv == `MD_MUL)),
+        .req_valid(ix_md_valid && (ix_md_muldiv == `MD_MUL) && !md_abort),
         .req_ready(mul_req_ready),
+        .resp_result(mul_resp_result),
         .resp_valid(mul_resp_valid),
-        .resp_result(mul_resp_result)
+        .resp_ready(md_wb_ready_int)
     );
 
     wire div_req_ready;
@@ -78,10 +80,11 @@ module md(
         .operand1(ix_md_operand1),
         .operand2(ix_md_operand2),
         .div_op(ix_md_md_op),
-        .req_valid(ix_md_valid && (ix_md_muldiv == `MD_DIV)),
+        .req_valid(ix_md_valid && (ix_md_muldiv == `MD_DIV) && !md_abort),
         .req_ready(div_req_ready),
+        .resp_result(div_resp_result),
         .resp_valid(div_resp_valid),
-        .resp_result(div_resp_result)
+        .resp_ready(md_wb_ready_int)
     );
 
     assign ix_md_ready = !active;
@@ -96,6 +99,7 @@ module md(
     wire md_wb_valid_int = (active_unit == `MD_MUL) ?
             (mul_resp_valid) : (div_resp_valid);
     assign md_wb_valid = md_wb_valid_int && !abort_requested;
+    wire md_wb_ready_int = md_wb_ready || abort_requested;
 
     // Abortion is only valid the 0th and 1st cycle it started.
     reg abort_valid;
@@ -115,7 +119,7 @@ module md(
             if (md_abort && abort_valid) begin
                 abort_requested <= 1'b1;
             end
-            if (md_wb_valid_int) begin
+            if (md_wb_valid_int && md_wb_ready_int) begin
                 active <= 1'b0;
                 abort_requested <= 1'b0;
             end

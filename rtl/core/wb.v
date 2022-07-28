@@ -40,6 +40,7 @@ module wb(
     input  wire [63:0]  ip_wb_pc,
     /* verilator lint_on UNUSED */
     input  wire         ip_wb_wb_en,
+    input  wire         ip_wb_hipri,
     input  wire         ip_wb_valid,
     output wire         ip_wb_ready,
     // From load-store pipe
@@ -58,6 +59,7 @@ module wb(
     input  wire [63:0]  md_wb_pc,
     /* verilator lint_on UNUSED */
     input  wire         md_wb_valid,
+    output wire         md_wb_ready,
     // From trap unit
     input  wire [4:0]   trap_wb_dst,
     input  wire [63:0]  trap_wb_result,
@@ -81,10 +83,13 @@ module wb(
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
-    // Current priority: md >>lsp > ip > trap. Though trap shouldn't have
+    // Current priority: md > lsp > ip > trap. Though trap shouldn't have
     // collision with other types
-    wire md_wb_ac = md_wb_req;
-    wire lsp_wb_ac = !md_wb_ac && lsp_wb_req;
+    // However IP is allowed to issue the hipri signal to ensure the writeback
+    // will be accepted this cycle. This creates a potential conflict between
+    // ip and md! Needs fix...
+    wire md_wb_ac = md_wb_req && !ip_wb_hipri;
+    wire lsp_wb_ac = (!md_wb_ac && !ip_wb_hipri) && lsp_wb_req;
     wire ip_wb_ac = (!md_wb_ac && !lsp_wb_ac) && ip_wb_req;
     wire trap_wb_ac = (!md_wb_ac && !lsp_wb_ac && !ip_wb_ac) && trap_wb_req;
 
@@ -131,6 +136,7 @@ module wb(
     // Acknowledge accepted wb, always acknowledge retire without writeback
     assign ip_wb_ready = !(ip_wb_valid && (!ip_wb_ac && !ip_rwowb_req));
     assign lsp_wb_ready = !(lsp_wb_valid && (!lsp_wb_ac && !lsp_rwowb_req));
+    assign md_wb_ready = !(md_wb_valid && !md_wb_ac);
     assign trap_wb_ready = !(trap_wb_valid && (!trap_wb_ac && !trap_rwowb_req));
 
     // Instruction retire count

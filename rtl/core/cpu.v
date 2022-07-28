@@ -385,6 +385,7 @@ module cpu(
         .ix_if_new_pc(ix_if_new_pc)
     );
 
+    wire ip_wb_hipri;
     ip ip0(
         .clk(clk),
         .rst(rst),
@@ -412,6 +413,7 @@ module cpu(
         .ip_wb_result(ip_wb_result),
         .ip_wb_pc(ip_wb_pc),
         .ip_wb_wb_en(ip_wb_wb_en),
+        .ip_wb_hipri(ip_wb_hipri),
         .ip_wb_valid(ip_wb_valid),
         .ip_wb_ready(ip_wb_ready),
         // To instruction fetch unit
@@ -506,6 +508,7 @@ module cpu(
     wire [63:0] md_wb_result;
     wire [63:0] md_wb_pc;
     wire        md_wb_valid;
+    wire        md_wb_ready;
     md md(
         .clk(clk),
         .rst(rst),
@@ -526,6 +529,7 @@ module cpu(
         .md_wb_result(md_wb_result),
         .md_wb_pc(md_wb_pc),
         .md_wb_valid(md_wb_valid),
+        .md_wb_ready(md_wb_ready),
         // This unit doesn't support stall
         .md_abort(pipe_flush)
     );
@@ -542,6 +546,7 @@ module cpu(
         .ip_wb_result(ip_wb_result),
         .ip_wb_pc(ip_wb_pc),
         .ip_wb_wb_en(ip_wb_wb_en),
+        .ip_wb_hipri(ip_wb_hipri),
         .ip_wb_valid(ip_wb_valid),
         .ip_wb_ready(ip_wb_ready),
         // From load-store pipe
@@ -556,6 +561,7 @@ module cpu(
         .md_wb_result(md_wb_result),
         .md_wb_pc(md_wb_pc),
         .md_wb_valid(md_wb_valid),
+        .md_wb_ready(md_wb_ready),
         // From trap unit
         .trap_wb_dst(trap_wb_dst),
         .trap_wb_result(trap_wb_result),

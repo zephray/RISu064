@@ -53,6 +53,7 @@ module ip(
     output reg  [63:0]  ip_wb_result,
     output reg  [63:0]  ip_wb_pc,
     output reg          ip_wb_wb_en,
+    output wire         ip_wb_hipri,
     output reg          ip_wb_valid,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
@@ -80,6 +81,7 @@ module ip(
         // Test if branch prediction is correct or not
         wire br_correct = (br_take == ix_ip_bp) &&
                 ((br_take) ? (br_target == ix_ip_bt) : 1'b1);
+        assign ip_wb_hipri = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE);
         wire ip_if_pc_override_comb = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE)
                 && (!br_correct);
         wire [63:0] ip_if_new_pc_comb = br_target;

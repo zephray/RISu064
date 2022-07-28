@@ -33,8 +33,9 @@ module mul(
     input  wire [2:0]   mul_op,
     input  wire         req_valid,
     output wire         req_ready,
+    output reg  [63:0]  resp_result,
     output reg          resp_valid,
-    output reg  [63:0]  resp_result
+    input  wire         resp_ready
 );
     // TODO: Currently it registers its output before WB. This is probably
     // unnecessary (as it won't be the critical path). Provide an option for
@@ -43,6 +44,7 @@ module mul(
     reg [64:0] mul_b;
     reg mul_high;
     reg mul_word;
+    reg mul_lowf; // 64-bit operation but only 32-bit low values are valid
 
     wire mac_a_sel = state[1];
     wire mac_b_sel = state[0];
@@ -52,7 +54,8 @@ module mul(
     wire [32:0] mac_b = mac_b_sel ? (mul_b[64:32]) : ({1'b0, mul_b[31:0]});
     wire [65:0] prod = acc + mac_a * mac_b;
 
-    assign req_ready = (state == ST_IDLE);
+    assign req_ready = (state == ST_IDLE) &&
+            (!resp_valid || (resp_valid && resp_ready));
 
     localparam ST_IDLE = 3'd5;
     localparam ST_LL = 3'd0;
@@ -63,8 +66,9 @@ module mul(
     always @(posedge clk) begin
         case (state)
         ST_IDLE: begin
-            resp_valid <= 1'b0;
-            if (req_valid) begin
+            if (resp_valid && resp_ready)
+                resp_valid <= 1'b0;
+            if (req_ready && req_valid) begin
                 mul_a <= {(mul_op == `MO_MULHU) ?
                         operand1[63] : 1'b0, operand1};
                 mul_b <= {((mul_op == `MO_MULHSU) || (mul_op == `MO_MULHU)) ?
@@ -72,13 +76,22 @@ module mul(
                 mul_word <= mul_op == `MO_MULW;
                 mul_high <= (mul_op == `MO_MULH) || (mul_op == `MO_MULHSU) ||
                         (mul_op == `MO_MULHU);
+                if ((operand1[63:32] == 32'b0) && (operand2[63:22] == 32'b0) &&
+                        (mul_op != `MO_MULW))
+                    mul_lowf <= 1;
                 acc <= 66'd0;
                 state <= ST_LL;
             end
         end
         ST_LL: begin
-            resp_result <= {{32{prod[31]}}, prod[31:0]};
+            resp_result[31:0] <= prod[31:0];
             if (mul_word) begin
+                resp_result[63:32] <= {32{prod[31]}};
+                resp_valid <= 1'b1;
+                state <= ST_IDLE;
+            end
+            else if (mul_lowf) begin
+                resp_result[63:32] <= prod[63:32];
                 resp_valid <= 1'b1;
                 state <= ST_IDLE;
             end

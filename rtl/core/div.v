@@ -50,17 +50,23 @@ module div(
     reg op_rem_reg;
     reg op_word_reg;
 
-    wire a_signbit = (op_word) ? operand1[31] : operand1[63];
-    wire b_signbit = (op_word) ? operand2[31] : operand2[63];
-    assign a_sign = (op_unsigned) ? 1'b0 : a_signbit;
-    assign b_sign = (op_unsigned) ? 1'b0 : b_signbit;
-    wire [63:0] a_ext = (op_word) ? {{32{a_sign}}, operand1[31:0]} : operand1;
-    wire [63:0] b_ext = (op_word) ? {{32{b_sign}}, operand2[31:0]} : operand2;
-    assign a_mag = (a_sign) ? (-a_ext) : (a_ext);
-    assign b_mag = (b_sign) ? (-b_ext) : (b_ext);
+    wire a_sign_64 = (op_unsigned) ? 1'b0 : operand1[63];
+    wire b_sign_64 = (op_unsigned) ? 1'b0 : operand2[63];
+    wire a_sign_32 = (op_unsigned) ? 1'b0 : operand1[31];
+    wire b_sign_32 = (op_unsigned) ? 1'b0 : operand2[31];
+    wire [63:0] a_mag_64 = (a_sign_64) ? (-operand1) : (operand1);
+    wire [63:0] b_mag_64 = (b_sign_64) ? (-operand2) : (operand2);
+    wire [63:0] a_ext = {{32{a_sign_32}}, operand1[31:0]};
+    wire [63:0] b_ext = {{32{b_sign_32}}, operand2[31:0]};
+    wire [63:0] a_mag_32 = (a_sign_32) ? (-a_ext) : (a_ext);
+    wire [63:0] b_mag_32 = (b_sign_32) ? (-b_ext) : (b_ext);
 
     wire op_word = div_op[2] ||
-            ((a_mag[63:32] == 32'b0) && (b_mag[63:32] == 32'b0));
+            ((a_mag_64[63:32] == 32'b0) && (b_mag_64[63:32] == 32'b0));
+    assign a_mag = (op_word) ? (a_mag_32) : (a_mag_64);
+    assign b_mag = (op_word) ? (b_mag_32) : (b_mag_64);
+    assign a_sign = (op_word) ? (a_sign_32) : (a_sign_64);
+    assign b_sign = (op_word) ? (b_sign_32) : (b_sign_64);
 
     wire [31:0] a_rev_32;
     wire [63:0] a_rev_64; 

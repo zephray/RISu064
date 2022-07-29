@@ -57,6 +57,9 @@ module ip(
     output reg          ip_wb_valid,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
+    output reg          ip_if_branch,
+    output reg          ip_if_branch_taken,
+    output reg  [63:0]  ip_if_branch_pc,
     output reg          ip_if_pc_override,
     output reg  [63:0]  ip_if_new_pc
 );
@@ -71,30 +74,37 @@ module ip(
 
     generate
     if (IP_HANDLE_BRANCH == 1) begin: ip_branch_support
+        wire br_valid = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE);
         wire [63:0] br_offset = {{43{ix_ip_br_offset[20]}}, ix_ip_br_offset};
-        wire [63:0] br_target = (ix_ip_br_base + br_offset) & (~64'd1);
+        wire [63:0] br_taken_addr = (ix_ip_br_base + br_offset) & (~64'd1);
         wire br_take =
                 (ix_ip_br_type == `BT_NONE) ? (1'b0) :
                 (ix_ip_br_type == `BT_JAL) ? (1'b1) :
                 (ix_ip_br_type == `BT_JALR) ? (1'b1) :
                 ((ix_ip_br_neg) ? (!alu_result[0]) : (alu_result[0]));
+        wire [63:0] br_target = br_take ? br_taken_addr : ix_ip_pc + 4;
         // Test if branch prediction is correct or not
         wire br_correct = (br_take == ix_ip_bp) &&
                 ((br_take) ? (br_target == ix_ip_bt) : 1'b1);
-        assign ip_wb_hipri = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE);
-        wire ip_if_pc_override_comb = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE)
-                && (!br_correct);
+        assign ip_wb_hipri = br_valid;
+        wire ip_if_pc_override_comb = br_valid && (!br_correct);
         wire [63:0] ip_if_new_pc_comb = br_target;
         always @(posedge clk) begin
+            ip_if_branch <= br_valid;
+
             if (ip_if_pc_override) begin
                 // A previous taken mispredicted branch means the second branch
                 // should be flushed away
                 ip_if_pc_override <= 1'b0;
+                ip_if_branch <= 1'b0;
             end
             else begin
                 ip_if_pc_override <= ip_if_pc_override_comb;
-                ip_if_new_pc <= ip_if_new_pc_comb;
             end
+
+            ip_if_branch_taken <= br_take;
+            ip_if_branch_pc <= ix_ip_pc;
+            ip_if_new_pc <= ip_if_new_pc_comb;
         end
     end
     endgenerate

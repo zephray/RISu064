@@ -43,6 +43,10 @@ module ifp(
     output wire         if_dec_valid,
     input  wire         if_dec_ready,
     // Next PC
+    // Exception and CSR induced control flow change are not tracked by BP
+    input  wire         ip_if_branch,
+    input  wire         ip_if_branch_taken,
+    input  wire [63:0]  ip_if_branch_pc,
     input  wire         if_pc_override,
     input  wire [63:0]  if_new_pc
 );
@@ -51,13 +55,7 @@ module ifp(
     // F1: PC generation
     wire [63:0] next_pc;
     reg [63:0] f1_f2_pc;
-    reg f1_f2_bp;
-    reg [63:0] f1_f2_bt;
     reg f1_f2_valid;
-
-    // Placeholder for BPU and BTB. What about RAS
-    wire bp_result = `BP_NOT_TAKEN;
-    wire [63:0] btb_result = 64'bx;
 
     wire ifp_stalled_memory_resp = (f2_dec_req_valid && !im_resp_valid) && !rst;
     wire ifp_stalled_back_pressure = (fifo_bp && !if_dec_ready) && !rst;
@@ -81,9 +79,72 @@ module ifp(
         .b_ready(!(ifp_stalled || ifp_stalled_last || ifp_memreq_nack))
     );
 
+    // BTB
+    // Valid PC: [31:2] // 30 bits
+    // index: 5 bits, tag: 25 bits, target address: 30 bits, valid 1 bit
+    // total: 56 bit
+    wire [4:0] btb_index = next_pc[6:2];
+    wire [55:0] btb_rd;
+
+    reg btb_init_active = 1'b0;
+    reg [4:0] btb_init_index;
+    always @(posedge clk) begin
+        // BTB initializer
+        if (btb_init_active) begin
+            if (btb_init_index == 5'd31)
+                btb_init_active <= 1'b0;
+            btb_init_index <= btb_init_index + 1;
+        end
+        if (rst) begin
+            btb_init_active <= 1'b1;
+            btb_init_index <= 5'd0;
+        end
+    end
+
+    wire [4:0] btb_wr_index = (btb_init_active) ? (btb_init_index) :
+            (ip_if_branch_pc[6:2]);
+    wire [55:0] btb_wr_data = (btb_init_active) ? (56'd0) :
+            ({1'b1, ip_if_branch_pc[31:7], if_new_pc[31:2]});
+    wire btb_wr_en = (btb_init_active) ? (1'b1) :
+            (ip_if_branch && ip_if_branch_taken);
+
+    /*always @(posedge clk) begin
+        if (btb_wr_en) begin
+            $display("BTB index %d update to %014x", btb_wr_index, btb_wr_data);
+        end
+    end*/
+
+    ram_32_56 btb_ram(
+        .clk(clk),
+        .rst(rst),
+        .raddr(btb_index),
+        .re(!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack),
+        .rd(btb_rd), // 1 cycle later
+        .waddr(btb_wr_index),
+        .wr(btb_wr_data),
+        .we(btb_wr_en)
+    );
+
+    // Placeholder for BPU and BTB. What about RAS
+    // TODO: Handle cases where an ifencei or something else happend so the
+    // instruction at a certain PC is no longer a branch. This should be
+    // corrected somewhere.
+    wire bp_result = `BP_TAKEN;
+    wire [63:0] btb_result = {32'b0, btb_rd[29:0], 2'b0};
+    wire btb_hit = btb_rd[55] && (btb_rd[54:30] == f1_f2_pc[31:7]) && !btb_init_active;
+    wire f1_bp = (bp_result == `BP_TAKEN) && (btb_hit);
+
+    /*always @(posedge clk) begin
+        if (btb_hit) begin
+            $display("BTB PC %08x hit with %014x", f1_f2_pc, btb_rd);
+        end
+    end*/
+
+    // Exteremely simple BPU
+
     assign next_pc =
-            (ifp_pc_override) ? (ifp_new_pc) :
-            (bp_result == `BP_TAKEN) ? (btb_result) : // Branch
+            (ifp_pc_override) ? (ifp_new_pc) : // mis-predict
+            (f1_bp) ? (btb_result) : // predicted branch
             (f1_f2_pc + 4); // PC incr
 
     always @(posedge clk) begin
@@ -91,8 +152,6 @@ module ifp(
         if (!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack) begin
             f1_f2_valid <= 1'b1;
             f1_f2_pc <= next_pc;
-            f1_f2_bp <= bp_result;
-            f1_f2_bt <= btb_result;
         end
         else begin
             if ((!ifp_stalled && ifp_stalled_last) || ifp_memreq_nack)
@@ -122,9 +181,10 @@ module ifp(
         end
         if (!ifp_stalled) begin
             f2_dec_pc <= f1_f2_pc;
-            f2_dec_bp <= f1_f2_bp;
-            f2_dec_bt <= f1_f2_bt;
             f2_dec_pc_override <= ifp_pc_override;
+            // Take directly from F1
+            f2_dec_bp <= f1_bp;
+            f2_dec_bt <= btb_result;
         end
     end
 

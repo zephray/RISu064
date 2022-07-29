@@ -87,6 +87,9 @@ module cpu(
     wire [63:0] if_dec_bt;
     wire        if_dec_valid;
     wire        if_dec_ready;
+    wire        ip_if_branch;
+    wire        ip_if_branch_taken;
+    wire [63:0] ip_if_branch_pc;
     wire        ip_if_pc_override;
     wire [63:0] ip_if_new_pc;
     wire        ix_if_pc_override;
@@ -99,8 +102,8 @@ module cpu(
 
     assign if_pc_override = ip_if_pc_override || ix_if_pc_override ||
             trap_if_pc_override;
-    assign if_new_pc = ip_if_pc_override ? ip_if_new_pc :
-            ix_if_pc_override ? ix_if_new_pc : trap_if_new_pc;
+    assign if_new_pc = trap_if_pc_override ? trap_if_new_pc :
+            ix_if_pc_override ? ix_if_new_pc : ip_if_new_pc;
     assign pipe_flush = if_pc_override || lsp_unaligned_load ||
             lsp_unaligned_store;
 
@@ -121,6 +124,9 @@ module cpu(
         .if_dec_valid(if_dec_valid),
         .if_dec_ready(if_dec_ready),
         // Next PC
+        .ip_if_branch(ip_if_branch),
+        .ip_if_branch_taken(ip_if_branch_taken),
+        .ip_if_branch_pc(ip_if_branch_pc),
         .if_pc_override(if_pc_override),
         .if_new_pc(if_new_pc)
     );
@@ -417,6 +423,9 @@ module cpu(
         .ip_wb_valid(ip_wb_valid),
         .ip_wb_ready(ip_wb_ready),
         // To instruction fetch unit
+        .ip_if_branch(ip_if_branch),
+        .ip_if_branch_taken(ip_if_branch_taken),
+        .ip_if_branch_pc(ip_if_branch_pc),
         .ip_if_pc_override(ip_if_pc_override),
         .ip_if_new_pc(ip_if_new_pc)
     );

@@ -76,7 +76,7 @@ module mul(
                 mul_word <= mul_op == `MO_MULW;
                 mul_high <= (mul_op == `MO_MULH) || (mul_op == `MO_MULHSU) ||
                         (mul_op == `MO_MULHU);
-                if ((operand1[63:32] == 32'b0) && (operand2[63:22] == 32'b0) &&
+                if ((operand1[63:32] == 32'b0) && (operand2[63:32] == 32'b0) &&
                         (mul_op != `MO_MULW))
                     mul_lowf <= 1;
                 acc <= 66'd0;

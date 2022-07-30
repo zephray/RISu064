@@ -22,36 +22,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-module ram_4096_2(
-    input wire clk,
-    input wire rst,
-    // Read write port
-    input wire [11:0] addr0,
-    input wire re0,
-    output reg [1:0] rd0,
-    input wire [1:0] wr0,
-    input wire we0,
-    // Read only port
-    input wire [11:0] addr1,
-    input wire re1,
-    output reg [1:0] rd1
-);
 
-    reg [1:0] mem [0:4095];
+// System options
 
-    always @(posedge clk) begin
-        if (!rst) begin
-            if (re0) begin
-                rd0 <= mem[addr0];
-            end
-            else if (we0) begin
-                mem[addr0] <= wr0;
-            end
-            
-            if (re1) begin
-                rd1 <= mem[addr1];
-            end
-        end
-    end
+// Branch predictor
+//`define BPU_ALWAYS_NOT_TAKEN
+//`define BPU_ALWAYS_TAKEN
+//`define BPU_SIMPLE
+`define BPU_GLOBAL
+//`define BPU_GLOBAL_BIMODAL
+`define BPU_GLOBAL_GSHARE
+//`define BPU_GLOBAL_GSELECT
 
-endmodule
+`ifdef BPU_GLOBAL_GSELECT
+`define BPU_GHR_WIDTH   3
+`elsif BPU_GLOBAL_GSHARE
+`define BPU_GHR_WIDTH   12
+`endif

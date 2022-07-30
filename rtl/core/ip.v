@@ -84,8 +84,7 @@ module ip(
                 ((ix_ip_br_neg) ? (!alu_result[0]) : (alu_result[0]));
         wire [63:0] br_target = br_take ? br_taken_addr : ix_ip_pc + 4;
         // Test if branch prediction is correct or not
-        wire br_correct = (br_take == ix_ip_bp) &&
-                ((br_take) ? (br_target == ix_ip_bt) : 1'b1);
+        wire br_correct = br_target == ix_ip_bt;
         assign ip_wb_hipri = br_valid;
         wire ip_if_pc_override_comb = br_valid && (!br_correct);
         wire [63:0] ip_if_new_pc_comb = br_target;
@@ -105,6 +104,24 @@ module ip(
             ip_if_branch_taken <= br_take;
             ip_if_branch_pc <= ix_ip_pc;
             ip_if_new_pc <= ip_if_new_pc_comb;
+        end
+
+        reg [63:0] dbg_bp_correct;
+        reg [63:0] dbg_btb_miss;
+        always @(posedge clk) begin
+            if (rst) begin
+                dbg_bp_correct <= 0;
+                dbg_btb_miss <= 0;
+            end
+            else begin
+                if (br_valid) begin
+                    if (br_take == ix_ip_bp) begin
+                        dbg_bp_correct <= dbg_bp_correct + 1;
+                        if (br_target != ix_ip_bt)
+                            dbg_btb_miss <= dbg_btb_miss + 1;
+                    end
+                end
+            end
         end
     end
     endgenerate

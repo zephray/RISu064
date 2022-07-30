@@ -23,6 +23,7 @@
 // SOFTWARE.
 //
 `include "defines.vh"
+`include "options.vh"
 
 // Instruction fetching pipeline
 // Pipeline latency = 2 cycles: PCgen, Imem
@@ -60,7 +61,8 @@ module ifp(
     wire fifo_bp;
     wire ifp_stalled_memory_resp = (f1_f2_valid && !im_resp_valid) && !rst;
     wire ifp_stalled_back_pressure = (fifo_bp && !if_dec_ready) && !rst;
-    wire ifp_stalled = ifp_stalled_memory_resp || ifp_stalled_back_pressure;
+    wire ifp_stalled = ifp_stalled_memory_resp || ifp_stalled_back_pressure ||
+            bp_init_active || btb_init_active;
     reg ifp_stalled_last;
     wire [63:0] ifp_new_pc;
     wire ifp_pc_override;
@@ -131,22 +133,206 @@ module ifp(
         .we(btb_wr_en)
     );
 
-    // Placeholder for BPU and BTB. What about RAS
-    // TODO: Handle cases where an ifencei or something else happend so the
-    // instruction at a certain PC is no longer a branch. This should be
-    // corrected somewhere.
-    wire bp_result = `BP_TAKEN;
-    wire [63:0] btb_result = {32'b0, btb_rd[29:0], 2'b0};
-    wire btb_hit = btb_rd[55] && (btb_rd[54:30] == f1_f2_pc[31:7]) && !btb_init_active;
-    wire f1_bp = (bp_result == `BP_TAKEN) && (btb_hit);
+    wire bu_active = im_resp_valid;
 
-    /*always @(posedge clk) begin
-        if (btb_hit) begin
-            $display("BTB PC %08x hit with %014x", f1_f2_pc, btb_rd);
+    wire insn_is_bcond = im_instr[6:0] == `OP_BRANCH;
+    wire insn_is_jal = im_instr[6:0] == `OP_JAL;
+    wire insn_is_jalr = im_instr[6:0] == `OP_JALR;
+    wire insn_is_branch = insn_is_bcond || insn_is_jal || insn_is_jalr;
+    wire insn_is_call = im_instr[11:0] == 12'h0ef; // jal ra, xx or jalr ra, xx
+    wire insn_is_ret = im_instr == 32'h00008067; // jalr zero, ra
+
+    // Exteremely simple BPU
+    `ifdef BPU_ALWAYS_NOT_TAKEN
+    wire bp_result = `BP_NOT_TAKEN;
+    wire bp_init_active = 0;
+    `elsif BPU_ALWAYS_TAKEN
+    wire bp_result = `BP_TAKEN;
+    wire bp_init_active = 0;
+    `elsif BPU_SIMPLE
+    wire bp_init_active = 0;
+    reg [1:0] bp_counter;
+    wire [1:0] bp_counter_inc = (bp_counter == 2'b11) ? 2'b11 : bp_counter + 1;
+    wire [1:0] bp_counter_dec = (bp_counter == 2'b00) ? 2'b00 : bp_counter - 1;
+    always @(posedge clk) begin
+        if (rst) begin
+            bp_counter <= 2'b01;
+        end
+        else begin
+            if (ip_if_branch) begin
+                bp_counter <= (ip_if_branch_taken) ?
+                        bp_counter_inc : bp_counter_dec;
+            end
+        end
+    end
+    wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
+    `elsif BPU_GLOBAL
+    wire [1:0] bp_counter;
+    wire [11:0] bp_index;
+    wire [11:0] bp_wr_index;
+    wire [1:0] bp_wr_data;
+    wire bp_wr_en;
+    wire [1:0] bp_update_counter;
+    wire bp_update_ren;
+    ram_4096_2 bpu_ram(
+        .clk(clk),
+        .rst(rst),
+        .addr0(bp_wr_index),
+        .re0(bp_update_ren),
+        .rd0(bp_update_counter),
+        .wr0(bp_wr_data),
+        .we0(bp_wr_en),
+        .addr1(bp_index),
+        .re1(next_valid && !ifp_memreq_nack),
+        .rd1(bp_counter)
+    );
+
+    // BP initializer
+    reg bp_init_active = 1'b0;
+    reg [11:0] bp_init_index;
+    always @(posedge clk) begin
+        // BP table initializer
+        if (bp_init_active) begin
+            if (bp_init_index == 12'd4095)
+                bp_init_active <= 1'b0;
+            bp_init_index <= bp_init_index + 1;
+        end
+        if (rst) begin
+            bp_init_active <= 1'b1;
+            bp_init_index <= 12'd0;
+        end
+    end
+
+    assign bp_wr_index = (bp_init_active) ? (bp_init_index) : (bp_update_fifo_index);
+    wire [1:0] bp_wr_data = (bp_init_active) ? (2'd1) : (bp_update_data);
+    wire bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
+
+    /*reg [11:0] dbg_bp_index;
+    always @(posedge clk) begin
+        if (bp_update_en) begin
+            $display("BP Index %03x updated to %d", bp_update_fifo_index, bp_update_data);
+        end
+
+        dbg_bp_index <= bp_index;
+        if (bu_active && insn_is_branch) begin
+            $display("PC %08x predicted to be %d from index %03x %d", f1_f2_pc, bp_result, dbg_bp_index, bp_counter);
+        end
+
+        if (ip_if_branch) begin
+            if (ip_if_branch_taken)
+                $display("PC %08x branch taken", ip_if_branch_pc);
+            else
+                $display("PC %08x branch not taken", ip_if_branch_pc);
         end
     end*/
 
-    // Exteremely simple BPU
+    reg bp_update_fifo_ready;
+    wire bp_update_fifo_valid;
+    wire [11:0] bp_update_fifo_index;
+    wire bp_update_fifo_taken;
+    wire bp_update_fifo_input_ready;
+    fifo_nd #(.WIDTH(13), .ABITS(2)) bp_update_fifo (
+        .clk(clk),
+        .rst(rst),
+        .a_data({bp_update_index, ip_if_branch_taken}),
+        .a_valid(ip_if_branch),
+        .a_ready(bp_update_fifo_input_ready),
+        .a_almost_full(),
+        .b_data({bp_update_fifo_index, bp_update_fifo_taken}),
+        .b_valid(bp_update_fifo_valid),
+        .b_ready(bp_update_fifo_ready)
+    );
+
+    // Happnes, but rare. Shouldn't affect performance much
+    always @(posedge clk) begin
+        if (!bp_update_fifo_input_ready && ip_if_branch) begin
+            $display("BP update queue overflow");
+        end
+    end
+
+    wire [1:0] bp_counter_inc = (bp_update_counter == 2'b11) ? 2'b11 : bp_update_counter + 1;
+    wire [1:0] bp_counter_dec = (bp_update_counter == 2'b00) ? 2'b00 : bp_update_counter - 1;
+    wire [11:0] bp_update_index;
+    wire [1:0] bp_update_data = (bp_update_fifo_taken) ? bp_counter_inc : bp_counter_dec;
+    wire bp_update_ren = !bp_update_fifo_ready && bp_update_fifo_valid; // R
+    wire bp_update_en = bp_update_fifo_ready && bp_update_fifo_valid; // W
+    always @(posedge clk) begin
+        if (bp_update_fifo_ready)
+            bp_update_fifo_ready <= 1'b0;
+        else
+            bp_update_fifo_ready <= bp_update_fifo_valid;
+    end
+
+    // Global history register
+    `ifdef BPU_GHR_WIDTH
+    reg [`BPU_GHR_WIDTH-1:0] branch_history_actual;
+    reg [`BPU_GHR_WIDTH-1:0] branch_history_speculative;
+    // Speculative history
+    always @(posedge clk) begin
+        if (ip_if_branch) begin
+            branch_history_actual <=
+                {branch_history_actual[`BPU_GHR_WIDTH-2:0], ip_if_branch_taken};
+            //$display("Update actual branch history to %b", {branch_history_actual[`BPU_GHR_WIDTH-2:0], ip_if_branch_taken});
+        end
+
+        if (bu_active) begin
+            if (ip_if_branch && if_pc_override) begin
+                // Mispredicted, correct speculation back to 1 step
+                branch_history_speculative <=
+                    {branch_history_actual[`BPU_GHR_WIDTH-2:0], ip_if_branch_taken};
+                //$display("Correct branch history to %b", {branch_history_actual[`BPU_GHR_WIDTH-2:0], ip_if_branch_taken});
+            end
+            else if (insn_is_branch) begin
+                // Speculatively update BHR if the instruction is a branch
+                branch_history_speculative <=
+                    {branch_history_speculative[`BPU_GHR_WIDTH-2:0], f1_bp};
+                //$display("Speculate branch history to %b", {branch_history_speculative[`BPU_GHR_WIDTH-2:0], f1_bp});
+            end
+        end
+
+        if (rst) begin
+            branch_history_actual <= 0;
+            branch_history_speculative <= 0;
+        end
+    end
+
+    wire [`BPU_GHR_WIDTH-1:0] branch_history_r = branch_history_speculative;
+    wire [`BPU_GHR_WIDTH-1:0] branch_history_w = branch_history_actual;
+
+    `endif
+
+    `ifdef BPU_GLOBAL_GSHARE
+    assign bp_update_index = branch_history_w ^ ip_if_branch_pc[13:2];
+    assign bp_index = branch_history_r ^ next_pc[13:2];
+    `elsif BPU_GLOBAL_GSELECT
+    assign bp_update_index = {branch_history_w, ip_if_branch_pc[13-`BPU_GHR_WIDTH:2]};
+    assign bp_index = {branch_history_r, next_pc[13-`BPU_GHR_WIDTH:2]};
+    `elsif BPU_GLOBAL_BIMODAL
+    assign bp_update_index = ip_if_branch_pc[13:2];
+    assign bp_index = next_pc[13:2];
+    `endif
+
+    wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
+
+    `endif
+
+    // TODO: Handle cases where an ifencei or something else happend so the
+    // instruction at a certain PC is no longer a branch. This should be
+    // corrected somewhere.
+    wire [63:0] btb_result = {32'b0, btb_rd[29:0], 2'b0};
+    wire btb_hit = btb_rd[55] && (btb_rd[54:30] == f1_f2_pc[31:7]) && !btb_init_active;
+    // Branch if BTB hit, and BP says taken or it's unconditional branch
+    wire f1_bp = ((bp_result == `BP_TAKEN) || (!insn_is_bcond)) && (btb_hit);
+
+    /*always @(posedge clk) begin
+        if (bu_active && btb_hit) begin
+            $display("BTB PC %08x hit with %014x", f1_f2_pc, btb_rd);
+        end
+    end
+
+    always @(negedge clk) begin
+        $display(""); // newline
+    end*/
 
     assign next_pc =
             (ifp_pc_override) ? (ifp_new_pc) : // mis-predict
@@ -185,7 +371,7 @@ module ifp(
     fifo_2d #(.WIDTH(162)) if_fifo (
         .clk(clk),
         .rst(rst || ifp_pc_override),
-        .a_data({im_instr, f1_f2_pc, f1_bp, btb_result, ifp_pc_override}),
+        .a_data({im_instr, f1_f2_pc, bp_result, next_pc, ifp_pc_override}),
         .a_valid(im_resp_valid),
         /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),

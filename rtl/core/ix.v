@@ -244,16 +244,28 @@ module ix(
     endgenerate
 
     // WAW hazard
-    // TODO: If WB is accepted this cycle, then it's not a hazard
-    wire dst_ready = (!dec_ix_wb_en) ||
+    // TODO: If WB is accepted this cycle OR will be accepted next cycle,
+    // then it's not a hazard
+    wire waw_from_ip = (!dec_ix_wb_en) ||
             ((!ip_wb_active || (ip_wb_dst != dec_ix_rd)) &&
             (!ip_ex_active || (ix_ip_dst != dec_ix_rd)) &&
-            (!ip_ex_ixstalled || (ix_ip_dst != dec_ix_rd)) &&
-            (!lsp_wb_active || (lsp_wb_dst != dec_ix_rd)) &&
+            (!ip_ex_ixstalled || (ix_ip_dst != dec_ix_rd)));
+    // Warning: this doesn't check the case where LSP is ready for WB.
+    // This is creates an edge case where is a load instruction destination is
+    // also used for jal target register, and MD happens to be active for two
+    // cycles (doesn't currently possible), a WAW condition happens.
+    // When this ever becomes possible, WB stage needs provision to fix this.
+    wire waw_from_lsp =
             (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec_ix_rd)) &&
-            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd))) &&
-            (!ix_md_valid || (ix_md_dst != dec_ix_rd)) &&
+            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd));
+    wire waw_from_md = (!ix_md_valid || (ix_md_dst != dec_ix_rd)) &&
             (!md_ix_active || (md_ix_dst != dec_ix_rd));
+    // For LSP: It's only going to be faster than MD, only check md
+    wire waw_lsp = waw_from_md;
+    // For IP: It need to protect against LSP and MD
+    wire waw_ip = waw_from_lsp && waw_from_md;
+    // For MD: It need to protect against only LSP
+    wire waw_md = waw_from_lsp;
 
     wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
     wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
@@ -274,14 +286,14 @@ module ix(
     reg trap_ongoing;
     wire int_pending = (trap_ix_ip != 16'd0);
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
-    wire ix_opr_ready = operand1_ready && operand2_ready && dst_ready;
+    wire ix_opr_ready = operand1_ready && operand2_ready;
     wire ix_issue_common = (dec_ix_valid) && (ix_opr_ready) && !pipe_flush  &&
             !trap_ongoing && !int_pending && !exc_pending;
-    wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) &&
+    wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) && (waw_ip) &&
             ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
-    wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) &&
+    wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) && (waw_lsp) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
-    wire ix_issue_md = ix_issue_common && (ix_md_ready) &&
+    wire ix_issue_md = ix_issue_common && (ix_md_ready) && (waw_md) &&
             (dec_ix_op_type == `OT_MULDIV);
     wire ix_issue_trap = ix_issue_common && !trap_ongoing &&
             (dec_ix_op_type == `OT_TRAP) && ix_barrier_done; 
@@ -300,6 +312,28 @@ module ix(
             ix_issue_ip0 || ix_issue_lsp || ix_issue_md || ix_issue_trap ||
             // Fake instruction for fence/ barrier
             ix_fence_done;
+
+    wire dbg_stl_ip0waw = ix_issue_common && (ix_ip_ready) && (!waw_ip) &&
+            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
+    wire dbg_stl_lspwaw = ix_issue_common && (ix_lsp_ready) && (!waw_lsp) &&
+            ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
+    wire dbg_stl_mdwaw = ix_issue_common && (ix_md_ready) && (!waw_md) &&
+            (dec_ix_op_type == `OT_MULDIV);
+    reg [63:0] dbg_stl_ip0waw_cntr;
+    reg [63:0] dbg_stl_lspwaw_cntr;
+    reg [63:0] dbg_stl_mdwaw_cntr;
+    always @(posedge clk) begin
+        if (rst) begin
+            dbg_stl_ip0waw_cntr <= 0;
+            dbg_stl_lspwaw_cntr <= 0;
+            dbg_stl_mdwaw_cntr <= 0;
+        end
+        else begin
+            dbg_stl_ip0waw_cntr <= dbg_stl_ip0waw_cntr + dbg_stl_ip0waw;
+            dbg_stl_lspwaw_cntr <= dbg_stl_lspwaw_cntr + dbg_stl_lspwaw;
+            dbg_stl_mdwaw_cntr <= dbg_stl_mdwaw_cntr + dbg_stl_mdwaw;
+        end
+    end
 
     wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
     assign dec_ix_ready = !rst && !ix_stall;

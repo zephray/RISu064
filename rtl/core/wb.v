@@ -85,9 +85,6 @@ module wb(
     // Always prefer accepting memory request for now
     // Current priority: md > lsp > ip > trap. Though trap shouldn't have
     // collision with other types
-    // However IP is allowed to issue the hipri signal to ensure the writeback
-    // will be accepted this cycle. This creates a potential conflict between
-    // ip and md! Needs fix...
     wire md_wb_ac = md_wb_req && !ip_wb_hipri;
     wire lsp_wb_ac = (!md_wb_ac && !ip_wb_hipri) && lsp_wb_req;
     wire ip_wb_ac = (!md_wb_ac && !lsp_wb_ac) && ip_wb_req;

@@ -52,19 +52,25 @@ module ifp(
 );
     localparam RESET_VECTOR = 64'h0000000080000000;
 
-    // F1: PC generation
+    // F1: PC generation and Imem request
     wire [63:0] next_pc;
     reg [63:0] f1_f2_pc;
     reg f1_f2_valid;
 
-    wire ifp_stalled_memory_resp = (f2_dec_req_valid && !im_resp_valid) && !rst;
+    wire fifo_bp;
+    wire ifp_stalled_memory_resp = (f1_f2_valid && !im_resp_valid) && !rst;
     wire ifp_stalled_back_pressure = (fifo_bp && !if_dec_ready) && !rst;
-    //wire ifp_stalled_back_pressure = (!if_dec_ready) && !rst;
     wire ifp_stalled = ifp_stalled_memory_resp || ifp_stalled_back_pressure;
     reg ifp_stalled_last;
     wire [63:0] ifp_new_pc;
     wire ifp_pc_override;
     wire ifp_memreq_nack = im_req_valid && !im_req_ready;
+    reg ifp_memreq_nack_last;
+    reg ifp_memreq_last;
+
+    wire next_valid =
+            ((!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack_last) ||
+            ((!ifp_stalled && ifp_stalled_last) || ifp_memreq_nack_last)) && !rst;
 
     fifo_1d_fwft #(.WIDTH(64)) if_new_pc_buffer(
         .clk(clk),
@@ -76,7 +82,7 @@ module ifp(
         /* verilator lint_on PINCONNECTEMPTY */
         .b_data(ifp_new_pc),
         .b_valid(ifp_pc_override),
-        .b_ready(!(ifp_stalled || ifp_stalled_last || ifp_memreq_nack))
+        .b_ready(next_valid && !ifp_memreq_nack)
     );
 
     // BTB
@@ -118,7 +124,7 @@ module ifp(
         .clk(clk),
         .rst(rst),
         .raddr(btb_index),
-        .re(!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack),
+        .re(next_valid && !ifp_memreq_nack),
         .rd(btb_rd), // 1 cycle later
         .waddr(btb_wr_index),
         .wr(btb_wr_data),
@@ -149,17 +155,16 @@ module ifp(
 
     always @(posedge clk) begin
         // Continue only if pipeline is not stalled
-        if (!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack) begin
-            f1_f2_valid <= 1'b1;
+        if (!ifp_stalled_memory_resp) begin
+            f1_f2_valid <= im_req_valid && im_req_ready;
+        end
+        if (next_valid && !ifp_memreq_nack) begin
             f1_f2_pc <= next_pc;
         end
-        else begin
-            if ((!ifp_stalled && ifp_stalled_last) || ifp_memreq_nack)
-                f1_f2_valid <= 1'b1;
-            else
-                f1_f2_valid <= 1'b0;
-        end
+
+        ifp_memreq_last <= im_req_valid;
         ifp_stalled_last <= ifp_stalled;
+        ifp_memreq_nack_last <= ifp_memreq_nack;
 
         if (rst) begin
             f1_f2_pc <= RESET_VECTOR - 4;
@@ -168,47 +173,25 @@ module ifp(
         end
     end
 
-    // F2: I mem
-    reg f2_dec_pc_override;
-    reg [63:0] f2_dec_pc;
-    reg f2_dec_bp;
-    reg [63:0] f2_dec_bt;
-    reg f2_dec_req_valid;
+    assign im_req_valid = next_valid;
+    assign im_req_addr = next_pc;
 
-    always @(posedge clk) begin
-        if (!ifp_stalled_memory_resp) begin
-            f2_dec_req_valid <= im_req_valid && im_req_ready;
-        end
-        if (!ifp_stalled) begin
-            f2_dec_pc <= f1_f2_pc;
-            f2_dec_pc_override <= ifp_pc_override;
-            // Take directly from F1
-            f2_dec_bp <= f1_bp;
-            f2_dec_bt <= btb_result;
-        end
-    end
-
-    assign im_req_valid = f1_f2_valid && !ifp_stalled;
-    assign im_req_addr = f1_f2_pc;
-
-    wire [31:0] im_instr = (f2_dec_pc[2]) ? im_resp_rdata[63:32] :
+    // F2: Imem result
+    wire [31:0] im_instr = (f1_f2_pc[2]) ? im_resp_rdata[63:32] :
             im_resp_rdata[31:0];
-
-    // Output buffering
-    wire fifo_bp;
-    wire fifo_valid;
     wire if_dec_pc_override;
-    wire if_dec_pc_override_late;
-    fifo_2d_fwft #(.WIDTH(163)) if_fifo (
+    wire fifo_valid;
+
+    fifo_2d #(.WIDTH(162)) if_fifo (
         .clk(clk),
         .rst(rst || ifp_pc_override),
-        .a_data({im_instr, f2_dec_pc, f2_dec_bp, f2_dec_bt, f2_dec_pc_override, ifp_pc_override}),
+        .a_data({im_instr, f1_f2_pc, f1_bp, btb_result, ifp_pc_override}),
         .a_valid(im_resp_valid),
         /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
         /* verilator lint_on PINCONNECTEMPTY */
         .a_almost_full(fifo_bp),
-        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override, if_dec_pc_override_late}),
+        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)
     );
@@ -221,6 +204,6 @@ module ifp(
     end
     `endif*/
 
-    assign if_dec_valid = (if_dec_pc_override || if_dec_pc_override_late) ? 1'b0 : fifo_valid;
+    assign if_dec_valid = (if_dec_pc_override) ? 1'b0 : fifo_valid;
 
 endmodule

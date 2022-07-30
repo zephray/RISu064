@@ -41,7 +41,6 @@ module fifo_2d_fwft (
     reg fifo_empty;
     reg fifo_full;
     reg [1:0] rd_ptr;
-    reg [1:0] wr_ptr;
     always @(posedge clk) begin
         if (a_ready && a_valid) begin
             fifo_top <= a_data;

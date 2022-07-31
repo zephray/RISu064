@@ -38,7 +38,12 @@ module ram_1024_64(
 
     always @(posedge clk) begin
         if (!rst) begin
-            rd <= mem[raddr];
+            if ((raddr == waddr) && we) begin
+                rd <= wr;
+            end
+            else begin
+                rd <= mem[raddr];
+            end
             // W
             if (we) begin
                 mem[waddr] <= wr;

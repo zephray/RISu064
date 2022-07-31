@@ -103,15 +103,18 @@ module kl_arbiter_2by1(
         case (arb_req_state)
         ARB_WAIT_FOR_CMD: begin
             // Process request
-            if (dn_req_ready && dn_req_valid) begin
-                req_burst_counter <= req_burst_size;
-                if (dn_req_wen && (req_burst_size > 1)) begin
-                    arb_req_state <= ARB_WAIT_FOR_BURST;
-                    arb_req_conn_reg <= arb_req_grant_id;
-                end
-                else begin
-                    arb_req_conn_reg <= ARB_NONE;
-                    arb_req_state <= ARB_WAIT_FOR_CMD;
+            if (dn_req_valid) begin
+                arb_req_conn_reg <= arb_req_grant_id;
+                if (dn_req_ready) begin
+                    req_burst_counter <= req_burst_size;
+                    if (dn_req_wen && (req_burst_size > 1)) begin
+                        arb_req_state <= ARB_WAIT_FOR_BURST;
+                        arb_req_conn_reg <= arb_req_grant_id;
+                    end
+                    else begin
+                        arb_req_conn_reg <= ARB_NONE;
+                        arb_req_state <= ARB_WAIT_FOR_CMD;
+                    end
                 end
             end
         end

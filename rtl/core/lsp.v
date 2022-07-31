@@ -76,11 +76,11 @@ module lsp(
     wire lsp_stalled_back_pressure = (!lsp_wb_ready) && !rst;
     wire lsp_stalled = lsp_stalled_memory_resp || lsp_stalled_back_pressure;
     reg lsp_stalled_last;
-    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last);
+    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last && !(lsp_memreq_last && !dm_req_ready));
     wire lsp_memreq_nack = dm_req_valid && !dm_req_ready;
+    reg lsp_memreq_last;
 
     reg ag_m_valid;
-    reg m_ag_access_cancelled;
     reg [63:0] ag_m_pc;
     reg [4:0] ag_m_dst;
     reg ag_m_wb_en;
@@ -123,7 +123,7 @@ module lsp(
 
     // AG stage
     always @(posedge clk) begin
-        if (handshaking && !lsp_memreq_nack) begin
+        if (handshaking) begin
             dm_req_addr <= agu_addr;
             dm_req_wdata <= mem_wdata;
             dm_req_wmask <= mem_wmask;
@@ -139,22 +139,14 @@ module lsp(
             lsp_unaligned_store <= !ag_abort && ualign && ix_lsp_wb_en;
         end
         else begin
-            if (lsp_memreq_nack) begin
-                ag_m_valid <= 1'b1;
-            end
-            else if ((!lsp_stalled && lsp_stalled_last)) begin
-                ag_m_valid <= m_ag_access_cancelled;
-                m_ag_access_cancelled <= 1'b0;
-            end
-            else
+            if (!lsp_stalled) begin
                 ag_m_valid <= 1'b0;
+            end
             lsp_unaligned_load <= 1'b0;
             lsp_unaligned_store <= 1'b0;
         end
-        if (ag_m_valid && lsp_stalled) begin
-            m_ag_access_cancelled <= 1'b1;
-        end
         lsp_stalled_last <= lsp_stalled;
+        lsp_memreq_last <= dm_req_valid;
 
         if (rst) begin
             lsp_stalled_last <= 1'b0;

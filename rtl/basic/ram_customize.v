@@ -22,28 +22,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+// This won't directly map to ASIC, useful for FPGA prototyping or simulation,
+// Design exploration etc.
+module ram_customize(
+    input wire clk,
+    input wire rst,
+    // Read write port
+    input wire [ABITS-1:0] addr0,
+    input wire re0,
+    output reg [DBITS-1:0] rd0,
+    input wire [DBITS-1:0] wr0,
+    input wire we0,
+    // Read only port
+    input wire [ABITS-1:0] addr1,
+    input wire re1,
+    output reg [DBITS-1:0] rd1
+);
 
-// System options
+    parameter DBITS = 8;
+    parameter ABITS = 12;
+    localparam DEPTH = (1 << ABITS);
 
-// 2**BHT_ABITS == BHT_DEPTH
-`define BHT_ABITS       12
-`define BHT_DEPTH       4096
+    reg [DBITS-1:0] mem [0:DEPTH-1];
 
-// Branch predictor
-//`define BPU_ALWAYS_NOT_TAKEN
-//`define BPU_ALWAYS_TAKEN
-//`define BPU_SIMPLE
-`define BPU_GLOBAL
-//`define BPU_GLOBAL_BIMODAL
-`define BPU_GLOBAL_GSHARE
-//`define BPU_GLOBAL_GSELECT
+    always @(posedge clk) begin
+        if (!rst) begin
+            if (re0) begin
+                rd0 <= mem[addr0];
+            end
+            else if (we0) begin
+                mem[addr0] <= wr0;
+            end
+            
+            if (re1) begin
+                rd1 <= mem[addr1];
+            end
+        end
+    end
 
-`ifdef BPU_GLOBAL_GSELECT
-`define BPU_GHR_WIDTH   3
-`elsif BPU_GLOBAL_GSHARE
-`define BPU_GHR_WIDTH   `BHT_ABITS
-`endif
-
-// 2**RAS_DEPTH_BITS == RAS_DEPTH
-`define RAS_DEPTH       16
-`define RAS_DEPTH_BITS  4
+endmodule

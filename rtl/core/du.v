@@ -72,7 +72,6 @@ module du(
 
     // Decode known instructions
 
-    // TODO: fix sign ext
     wire [63:0] imm_i_type = {{52{instr[31]}}, instr[31:20]};
     wire [63:0] imm_s_type = {{52{instr[31]}}, instr[31:25], instr[11:7]};
     wire [63:0] imm_b_type = {{51{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};

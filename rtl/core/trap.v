@@ -193,6 +193,7 @@ module trap(
                     `endif
                     end
                     endcase
+                    $display("CSR read %x = %d", ix_trap_csr_id, trap_wb_result);
                 end
             end
         end

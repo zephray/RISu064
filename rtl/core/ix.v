@@ -291,8 +291,9 @@ module ix(
     wire int_pending = (trap_ix_ip != 16'd0);
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
     wire ix_opr_ready = operand1_ready && operand2_ready;
+    wire lsp_req_pending = ix_lsp_valid && !ix_lsp_ready;
     wire ix_issue_common = (dec_ix_valid) && (ix_opr_ready) && !pipe_flush  &&
-            !trap_ongoing && !int_pending && !exc_pending;
+            !trap_ongoing && !int_pending && !exc_pending && !lsp_req_pending;
     wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) && (waw_ip) &&
             ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
     wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) && (waw_lsp) &&

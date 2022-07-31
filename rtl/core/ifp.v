@@ -70,7 +70,6 @@ module ifp(
     wire ifp_pc_override;
     wire ifp_memreq_nack = im_req_valid && !im_req_ready;
     reg ifp_memreq_nack_last;
-    reg ifp_memreq_last;
 
     wire next_valid =
             ((!ifp_stalled && !ifp_stalled_last && !ifp_memreq_nack_last) ||
@@ -125,6 +124,7 @@ module ifp(
     end*/
 
     ram_32_56 btb_ram(
+    //ram_customize
         .clk(clk),
         .rst(rst),
         .raddr(btb_index),
@@ -135,7 +135,7 @@ module ifp(
         .we(btb_wr_en)
     );
 
-    wire bu_active = im_resp_valid;
+    wire bu_active = im_resp_valid && !ifp_memreq_nack;
 
     wire insn_is_bcond = im_instr[6:0] == `OP_BRANCH;
     wire insn_is_jal = im_instr[6:0] == `OP_JAL;
@@ -170,13 +170,14 @@ module ifp(
     wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
     `elsif BPU_GLOBAL
     wire [1:0] bp_counter;
-    wire [11:0] bp_index;
-    wire [11:0] bp_wr_index;
+    wire [`BHT_ABITS-1:0] bp_index;
+    wire [`BHT_ABITS-1:0] bp_wr_index;
     wire [1:0] bp_wr_data;
     wire bp_wr_en;
     wire [1:0] bp_update_counter;
     wire bp_update_ren;
-    ram_4096_2 bpu_ram(
+    /*ram_4096_2 bpu_ram(*/
+    ram_customize #(.DBITS(2), .ABITS(`BHT_ABITS)) bpu_ram(
         .clk(clk),
         .rst(rst),
         .addr0(bp_wr_index),
@@ -191,17 +192,17 @@ module ifp(
 
     // BP initializer
     reg bp_init_active = 1'b0;
-    reg [11:0] bp_init_index;
+    reg [`BHT_ABITS-1:0] bp_init_index;
     always @(posedge clk) begin
         // BP table initializer
         if (bp_init_active) begin
-            if (bp_init_index == 12'd4095)
+            if (bp_init_index == `BHT_DEPTH - 1)
                 bp_init_active <= 1'b0;
             bp_init_index <= bp_init_index + 1;
         end
         if (rst) begin
             bp_init_active <= 1'b1;
-            bp_init_index <= 12'd0;
+            bp_init_index <= 0;
         end
     end
 
@@ -209,7 +210,7 @@ module ifp(
     wire [1:0] bp_wr_data = (bp_init_active) ? (2'd1) : (bp_update_data);
     wire bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
 
-    /*reg [11:0] dbg_bp_index;
+    /*reg [`BHT_ABITS-1:0] dbg_bp_index;
     always @(posedge clk) begin
         if (bp_update_en) begin
             $display("BP Index %03x updated to %d", bp_update_fifo_index, bp_update_data);
@@ -230,10 +231,10 @@ module ifp(
 
     reg bp_update_fifo_ready;
     wire bp_update_fifo_valid;
-    wire [11:0] bp_update_fifo_index;
+    wire [`BHT_ABITS-1:0] bp_update_fifo_index;
     wire bp_update_fifo_taken;
     wire bp_update_fifo_input_ready;
-    fifo_nd #(.WIDTH(13), .ABITS(2)) bp_update_fifo (
+    fifo_nd #(.WIDTH(`BHT_ABITS+1), .ABITS(2)) bp_update_fifo (
         .clk(clk),
         .rst(rst),
         .a_data({bp_update_index, ip_if_branch_taken}),
@@ -254,7 +255,7 @@ module ifp(
 
     wire [1:0] bp_counter_inc = (bp_update_counter == 2'b11) ? 2'b11 : bp_update_counter + 1;
     wire [1:0] bp_counter_dec = (bp_update_counter == 2'b00) ? 2'b00 : bp_update_counter - 1;
-    wire [11:0] bp_update_index;
+    wire [`BHT_ABITS-1:0] bp_update_index;
     wire [1:0] bp_update_data = (bp_update_fifo_taken) ? bp_counter_inc : bp_counter_dec;
     wire bp_update_ren = !bp_update_fifo_ready && bp_update_fifo_valid; // R
     wire bp_update_en = bp_update_fifo_ready && bp_update_fifo_valid; // W
@@ -304,14 +305,14 @@ module ifp(
     `endif
 
     `ifdef BPU_GLOBAL_GSHARE
-    assign bp_update_index = branch_history_w ^ ip_if_branch_pc[13:2];
-    assign bp_index = branch_history_r ^ next_pc[13:2];
+    assign bp_update_index = branch_history_w ^ ip_if_branch_pc[`BHT_ABITS+1:2];
+    assign bp_index = branch_history_r ^ next_pc[`BHT_ABITS+1:2];
     `elsif BPU_GLOBAL_GSELECT
-    assign bp_update_index = {branch_history_w, ip_if_branch_pc[13-`BPU_GHR_WIDTH:2]};
-    assign bp_index = {branch_history_r, next_pc[13-`BPU_GHR_WIDTH:2]};
+    assign bp_update_index = {branch_history_w, ip_if_branch_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
+    assign bp_index = {branch_history_r, next_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
     `elsif BPU_GLOBAL_BIMODAL
-    assign bp_update_index = ip_if_branch_pc[13:2];
-    assign bp_index = next_pc[13:2];
+    assign bp_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
+    assign bp_index = next_pc[`BHT_ABITS+1:2];
     `endif
 
     wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
@@ -366,8 +367,27 @@ module ifp(
             ras_level_speculative <= 0;
         end
     end
-    wire ras_hit = (insn_is_ret) && (ras_level_speculative != 0);
+
+    // Need to buffer insn_is_ret in case the memory takes more cycle to response
+    // next request
+    wire insn_is_ret_buf;
+    fifo_1d_fwft #(.WIDTH(1)) if_insn_ret_buffer(
+        .clk(clk),
+        .rst(rst),
+        .a_data(insn_is_ret),
+        .a_valid(im_resp_valid),
+        /* verilator lint_off PINCONNECTEMPTY */
+        .a_ready(),
+        /* verilator lint_on PINCONNECTEMPTY */
+        .b_data(insn_is_ret_buf),
+        .b_valid(),
+        .b_ready(im_req_ready)
+    );
+
+    wire ras_hit = (insn_is_ret_buf) && (ras_level_speculative != 0);
     wire [63:0] ras_result = {32'b0, ras[ras_ptr_speculative], 2'b0};
+
+    
 
     // TODO: Handle cases where an ifencei or something else happend so the
     // instruction at a certain PC is no longer a branch. This should be
@@ -375,7 +395,7 @@ module ifp(
     wire [63:0] btb_result = {32'b0, btb_rd[29:0], 2'b0};
     wire btb_hit = btb_rd[55] && (btb_rd[54:30] == f1_f2_pc[31:7]) && !btb_init_active;
     // Branch if BTB hit, and BP says taken or it's unconditional branch
-    wire f1_bp = ((bp_result == `BP_TAKEN) || (!insn_is_bcond)) && (btb_hit);
+    wire f1_bp = (bp_result == `BP_TAKEN) && (btb_hit);
 
     /*always @(posedge clk) begin
         if (bu_active && btb_hit) begin
@@ -402,7 +422,6 @@ module ifp(
             f1_f2_pc <= next_pc;
         end
 
-        ifp_memreq_last <= im_req_valid;
         ifp_stalled_last <= ifp_stalled;
         ifp_memreq_nack_last <= ifp_memreq_nack;
 

@@ -81,7 +81,7 @@ module ml_xcvr(
     reg [63:0] tx_wdata;
     reg kl_tx_ready_reg;
 
-    reg tx_pending; // TODO: Handle this
+    reg tx_pending;
 
     wire [63:0] tx_dfifo_a_data =
             (state == ST_TX_CLAMING_BUS) ? ({22'b0, tx_header}) :
@@ -286,7 +286,7 @@ module ml_xcvr(
                 // RX done
                 ml_data_ie <= 1'b0;
                 kl_rx_valid_reg <= 1'b0;
-                kl_tx_ready_reg <= 1'b1;
+                kl_tx_ready_reg <= !tx_pending;
                 state <= ST_IDLE;
             end
         end
@@ -295,6 +295,7 @@ module ml_xcvr(
                 if (burst_counter_dec == 0) begin
                     ml_data_ie <= 1'b0;
                     ml_txbr_reg <= 1'b0;
+                    kl_tx_ready_reg <= !tx_pending;
                     state <= ST_IDLE;
                 end
                 burst_counter <= burst_counter_dec;

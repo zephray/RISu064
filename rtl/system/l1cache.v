@@ -172,10 +172,11 @@ module l1cache(
             p2_cache_meta_waddr;
 
     // Sequential reload data array
-    wire reload_en = !cache_int_ready;
+    wire reload_en = !cache_int_ready && (cache_state != STATE_RETRY);
     reg [CACHE_LINE_IN_BLOCK_ABITS-1: 0] reload_counter;
     wire [CACHE_LINE_ABITS-1:0] cache_data_raddr =
-            core_dw_addr[CACHE_LINE_ABITS-1:0];
+            (cache_int_ready) ? core_dw_addr[CACHE_LINE_ABITS-1:0] :
+            p2_core_dw_addr[CACHE_LINE_ABITS-1:0];
     wire [CACHE_LINE_ABITS-1:0] p2_cache_data_waddr =
             p2_core_dw_addr[CACHE_LINE_ABITS-1:0];
     wire [CACHE_LINE_ABITS-1:0] cache_data_raddr_mux = (reload_en) ?
@@ -349,7 +350,7 @@ module l1cache(
                     // Need to wait for a cycle for cache line read
                     // Issue write next cycle
                     cache_state <= STATE_FLUSH;
-                    $display("Cache miss, way %d flush.", cache_victim);
+                    //$display("Cache miss, way %d flush.", cache_victim);
                 end
                 else begin
                     // flush is not required
@@ -362,7 +363,7 @@ module l1cache(
                     cache_way_wb_src <= CACHE_WB_MEM;
                     cache_state <= STATE_LOAD;
                     cache_data_we_reg[cache_victim] <= 1'b1;
-                    $display("Cache miss, way %d load.", cache_victim);
+                    //$display("Cache miss, way %d load.", cache_victim);
                 end
             end
             else begin

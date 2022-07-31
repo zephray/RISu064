@@ -88,6 +88,85 @@ module asictop(
     assign extint_timer = 1'b0;
     assign extint_external = 1'b0;
 
+    wire [31:0] ib_req_addr_buf;
+    wire [2:0]  ib_req_size_buf;
+    wire        ib_req_valid_buf;
+    wire        ib_req_ready_buf;
+    wire [63:0] ib_resp_rdata_buf;
+    wire        ib_resp_valid_buf;
+    wire        ib_resp_ready_buf;
+    kl_decoupler ib_decoupler(
+        .clk(clk),
+        .rst(rst),
+        .up_req_addr(ib_req_addr),
+        .up_req_wen(1'b0),
+        .up_req_wdata(64'b0),
+        .up_req_wmask(8'b0),
+        .up_req_size(ib_req_size),
+        .up_req_srcid(5'd0),
+        .up_req_valid(ib_req_valid),
+        .up_req_ready(ib_req_ready),
+        .up_resp_rdata(ib_resp_rdata),
+        .up_resp_size(),
+        .up_resp_dstid(),
+        .up_resp_valid(ib_resp_valid),
+        .up_resp_ready(ib_resp_ready),
+        .dn_req_addr(ib_req_addr_buf),
+        .dn_req_wen(),
+        .dn_req_wdata(),
+        .dn_req_wmask(),
+        .dn_req_size(ib_req_size_buf),
+        .dn_req_srcid(),
+        .dn_req_valid(ib_req_valid_buf),
+        .dn_req_ready(ib_req_ready_buf),
+        .dn_resp_rdata(ib_resp_rdata_buf),
+        .dn_resp_size(3'd0),
+        .dn_resp_dstid(5'd0),
+        .dn_resp_valid(ib_resp_valid_buf),
+        .dn_resp_ready(ib_resp_ready_buf)
+    );
+
+    wire [31:0] db_req_addr_buf;
+    wire [63:0] db_req_wdata_buf;
+    wire [7:0]  db_req_wmask_buf;
+    wire        db_req_wen_buf;
+    wire [2:0]  db_req_size_buf;
+    wire        db_req_valid_buf;
+    wire        db_req_ready_buf;
+    wire [63:0] db_resp_rdata_buf;
+    wire        db_resp_valid_buf;
+    wire        db_resp_ready_buf;
+    kl_decoupler db_decoupler(
+        .clk(clk),
+        .rst(rst),
+        .up_req_addr(db_req_addr),
+        .up_req_wen(db_req_wen),
+        .up_req_wdata(db_req_wdata),
+        .up_req_wmask(db_req_wmask),
+        .up_req_size(db_req_size),
+        .up_req_srcid(5'd0),
+        .up_req_valid(db_req_valid),
+        .up_req_ready(db_req_ready),
+        .up_resp_rdata(db_resp_rdata),
+        .up_resp_size(),
+        .up_resp_dstid(),
+        .up_resp_valid(db_resp_valid),
+        .up_resp_ready(db_resp_ready),
+        .dn_req_addr(db_req_addr_buf),
+        .dn_req_wen(db_req_wen_buf),
+        .dn_req_wdata(db_req_wdata_buf),
+        .dn_req_wmask(db_req_wmask_buf),
+        .dn_req_size(db_req_size_buf),
+        .dn_req_srcid(),
+        .dn_req_valid(db_req_valid_buf),
+        .dn_req_ready(db_req_ready_buf),
+        .dn_resp_rdata(db_resp_rdata_buf),
+        .dn_resp_size(3'd0),
+        .dn_resp_dstid(5'd0),
+        .dn_resp_valid(db_resp_valid_buf),
+        .dn_resp_ready(db_resp_ready_buf)
+    );
+
     wire [31:0] bus_req_addr;
     wire        bus_req_wen;
     wire [63:0] bus_req_wdata;
@@ -106,27 +185,27 @@ module asictop(
         .clk(clk),
         .rst(rst),
         // Instruction bus
-        .up0_req_addr(ib_req_addr),
+        .up0_req_addr(ib_req_addr_buf),
         .up0_req_wen(1'b0),
         .up0_req_wdata(64'bx),
         .up0_req_wmask(8'bx),
-        .up0_req_size(ib_req_size),
-        .up0_req_valid(ib_req_valid),
-        .up0_req_ready(ib_req_ready),
-        .up0_resp_rdata(ib_resp_rdata),
-        .up0_resp_valid(ib_resp_valid),
-        .up0_resp_ready(ib_resp_ready),
+        .up0_req_size(ib_req_size_buf),
+        .up0_req_valid(ib_req_valid_buf),
+        .up0_req_ready(ib_req_ready_buf),
+        .up0_resp_rdata(ib_resp_rdata_buf),
+        .up0_resp_valid(ib_resp_valid_buf),
+        .up0_resp_ready(ib_resp_ready_buf),
         // Data bus
-        .up1_req_addr(db_req_addr),
-        .up1_req_wen(db_req_wen),
-        .up1_req_wdata(db_req_wdata),
-        .up1_req_wmask(db_req_wmask),
-        .up1_req_size(db_req_size),
-        .up1_req_valid(db_req_valid),
-        .up1_req_ready(db_req_ready),
-        .up1_resp_rdata(db_resp_rdata),
-        .up1_resp_valid(db_resp_valid),
-        .up1_resp_ready(db_resp_ready),
+        .up1_req_addr(db_req_addr_buf),
+        .up1_req_wen(db_req_wen_buf),
+        .up1_req_wdata(db_req_wdata_buf),
+        .up1_req_wmask(db_req_wmask_buf),
+        .up1_req_size(db_req_size_buf),
+        .up1_req_valid(db_req_valid_buf),
+        .up1_req_ready(db_req_ready_buf),
+        .up1_resp_rdata(db_resp_rdata_buf),
+        .up1_resp_valid(db_resp_valid_buf),
+        .up1_resp_ready(db_resp_ready_buf),
         // External port
         .dn_req_addr(bus_req_addr),
         .dn_req_wen(bus_req_wen),

@@ -48,6 +48,7 @@ module fifo_nd (
     wire b_active = b_ready && b_valid;
 
     wire fifo_empty = fifo_level == 0;
+    wire fifo_almost_full = fifo_level == DEPTH - 1;
     wire fifo_full = fifo_level == DEPTH;
 
     always @(posedge clk) begin
@@ -70,8 +71,8 @@ module fifo_nd (
     end
     assign b_valid = !fifo_empty;
     assign b_data = fifo[rd_ptr];
-    assign a_ready = !fifo_full || b_ready;
-    assign a_almost_full = fifo_level == DEPTH-1;
+    assign a_ready = !fifo_almost_full;
+    assign a_almost_full = fifo_almost_full;
     assign a_full = fifo_full;
 
 endmodule

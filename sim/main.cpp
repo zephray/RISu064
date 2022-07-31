@@ -55,9 +55,21 @@ uint64_t tickcount;
 
 // Settings
 bool enable_trace = false;
+bool enable_stat = true;
 bool unlimited = true;
 bool verbose = false;
 uint64_t max_cycles;
+
+uint64_t stall_ipe;
+uint64_t stall_lag;
+uint64_t stall_lma;
+uint64_t stall_md;
+uint64_t if_nr_count;
+uint64_t pc_override_count;
+uint64_t branch_count;
+uint64_t taken_count;
+uint64_t mispredict_count;
+uint64_t total_stall;
 
 #ifdef TEST_SIMTOP
 KLMemsim *ram;
@@ -164,6 +176,43 @@ void tick() {
     // Let combinational changes propagate
     core->eval();
 
+    if (enable_stat) {
+        if (SIGNAL(dec_ix_valid) == 1) {
+            // Could issue, did it issue?
+            if (SIGNAL(ix__DOT__dbg_stl_ipe)[0] || SIGNAL(ix__DOT__dbg_stl_ipe[1]))
+                stall_ipe++;
+            if (SIGNAL(ix__DOT__dbg_stl_lag)[0] || SIGNAL(ix__DOT__dbg_stl_lag[1]))
+                stall_lag++;
+            if (SIGNAL(ix__DOT__dbg_stl_lma)[0] || SIGNAL(ix__DOT__dbg_stl_lma[1]))
+                stall_lma++;
+            if (SIGNAL(ix__DOT__dbg_stl_mdi)[0] || SIGNAL(ix__DOT__dbg_stl_mdi[1]))
+                stall_md++;
+        }
+        else {
+            // Couldn't issue, why?
+            if_nr_count++;
+        }
+
+        if (SIGNAL(dec_ix_ready) == 0) {
+            total_stall++;
+        }
+
+        if (SIGNAL(ip_if_branch) && SIGNAL(ip_wb_ready)) {
+            branch_count++;
+            if (SIGNAL(ip_if_branch_taken)) {
+                taken_count++;
+            }
+        }
+
+        if (SIGNAL(ip_if_pc_override)) {
+            mispredict_count++;
+        }
+
+        if (SIGNAL(if_pc_override)) {
+            pc_override_count++;
+        }
+    }
+
     if (enable_trace)
         trace->dump(tickcount * 10000);
     core->clk = 0;
@@ -191,6 +240,20 @@ void reset() {
     core->ib_req_ready = 1;
     core->db_req_ready = 1;
 #endif
+    // These are not reset by default as per RV priviledged mode spec
+    // Reset them here for stat purposes
+    SIGNAL(trap__DOT__minstret) = 0;
+    SIGNAL(trap__DOT__mcycle) = 0;
+    stall_ipe = 0;
+    stall_lag = 0;
+    stall_lma = 0;
+    stall_md = 0;
+    if_nr_count = 0;
+    taken_count = 0;
+    pc_override_count = 0;
+    branch_count = 0;
+    mispredict_count = 0;
+    total_stall = 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -306,6 +369,11 @@ int main(int argc, char *argv[]) {
             break;
         }
 
+        if (SIGNAL(ix_trap_int) && (SIGNAL(ix_trap_cause) == 3) && SIGNAL(ix_trap_valid)) {
+            printf("Called ebreak, stopping\n");
+            break;
+        }
+
         /*if (!SIGNAL(dec_ix_legal) && SIGNAL(dec_ix_valid)) {
             if (verbose)
                 printf("Encountered illegal instruction\n");
@@ -317,13 +385,44 @@ int main(int argc, char *argv[]) {
     time /= (CLOCKS_PER_SEC / 1000);
     if (time == 0) time = 1;
 
-    if (verbose) {
+    if (enable_stat) {
         printf("Simulation stopped after %ld cycles,\n"
                 "average simulation speed: %ld kHz.\n",
                 tickcount, tickcount / time);
         for (int i = 0; i < 31; i++) {
             printf("R%d = %016lx\n", i + 1, SIGNAL(rf__DOT__rf_array[i]));
         }
+
+        uint64_t instret = SIGNAL(trap__DOT__minstret);
+        uint64_t cycle = SIGNAL(trap__DOT__mcycle);
+        printf("Retired %lu instructions in %lu cycles. Average CPI: %.1f\n",
+                instret, cycle, (float)instret / (float)cycle);
+
+        uint64_t predicted = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_bp_correct);
+        uint64_t btb_miss_on_predict = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_btb_miss);
+
+        printf("Total stall/ bubbles: %lu\n", cycle - instret);
+        printf("Stall frontend stall: %lu\n", if_nr_count);
+        printf("Total backend stall: %lu\n", total_stall);
+        printf("Bubbles due to branching: %lu\n", mispredict_count * 2);
+        printf("Stall due to insufficient IFQ: %lu\n", if_nr_count - mispredict_count * 2);
+        printf("Stall due to integer EU busy (WB limited): %lu\n", stall_ipe);
+        printf("Stall due to load store structural latency: %lu\n", stall_lag);
+        printf("Stall due to load store memory latency: %lu\n", stall_lma);
+        printf("Stall due to multiply/ divide unit busy: %lu\n", stall_md);
+        printf("Stall due to WAW on integer EU: %lu\n", SIGNAL(ix__DOT__dbg_stl_ip0waw_cntr));
+        printf("Stall due to WAW on load store: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
+        printf("Stall due to WAW on multiply: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
+        printf("Stall due to branching: %lu\n", mispredict_count * 4);
+        printf("Total branches: %lu\n", branch_count);
+        if (branch_count != 0) {
+            printf("Taken branches: %lu (%ld%%)\n", taken_count, taken_count * 100 / branch_count);
+            printf("Branch predictor correct: %lu (%ld%%)\n", predicted, predicted * 100 / branch_count);
+            printf("BHT miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
+            printf("Combined mistaken branches: %lu (Correct %ld%%)\n", mispredict_count,
+                    100 - mispredict_count * 100 / branch_count);
+        }
+        printf("Remaining unhandled branches: %lu\n", pc_override_count - mispredict_count);
     }
 
     int retval;

@@ -35,6 +35,8 @@ module du(
     output reg br_neg,
     output reg br_base_src,
     output reg br_inj_pc,
+    output reg br_is_call,
+    output reg br_is_ret,
     // Decoder output specific for LS pipe
     output reg mem_sign,
     output reg [1:0] mem_width,
@@ -88,6 +90,8 @@ module du(
         br_neg = 1'bx;
         br_base_src = 1'bx;
         br_inj_pc = 1'b0;
+        br_is_call = 1'bx;
+        br_is_ret = 1'bx;
         csr_op = 2'bx;
         mret = 1'bx;
         intr = 1'bx;
@@ -251,6 +255,8 @@ module du(
             br_type = `BT_JAL;
             br_base_src = `BB_PC;
             br_inj_pc = 1'b0;
+            br_is_call = (rd == 1);
+            br_is_ret = 0;
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;
@@ -265,6 +271,8 @@ module du(
             br_type = `BT_JALR;
             br_base_src = `BB_RS1;
             br_inj_pc = 1'b1;
+            br_is_call = (rd == 1);
+            br_is_ret = (rd == 0) && (rs1 == 1);
             truncate = 1'b0;
             wb_en = 1'b1;
             legal = 1'b1;

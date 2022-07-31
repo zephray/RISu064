@@ -37,5 +37,9 @@
 `ifdef BPU_GLOBAL_GSELECT
 `define BPU_GHR_WIDTH   3
 `elsif BPU_GLOBAL_GSHARE
-`define BPU_GHR_WIDTH   12
+`define BPU_GHR_WIDTH   12 // Fixed option
 `endif
+
+// 2**RAS_DEPTH_BITS == RAS_DEPTH
+`define RAS_DEPTH       8
+`define RAS_DEPTH_BITS  3

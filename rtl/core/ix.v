@@ -44,6 +44,8 @@ module ix(
     input  wire         dec_ix_br_neg,
     input  wire         dec_ix_br_base_src,
     input  wire         dec_ix_br_inj_pc,
+    input  wire         dec_ix_br_is_call,
+    input  wire         dec_ix_br_is_ret,
     input  wire         dec_ix_mem_sign,
     input  wire [1:0]   dec_ix_mem_width,
     input  wire [1:0]   dec_ix_csr_op,
@@ -76,6 +78,8 @@ module ix(
     output reg          ix_ip_br_neg,
     output reg  [63:0]  ix_ip_br_base,
     output reg  [20:0]  ix_ip_br_offset,
+    output reg          ix_ip_br_is_call,
+    output reg          ix_ip_br_is_ret,
     output reg  [63:0]  ix_ip_operand1,
     output reg  [63:0]  ix_ip_operand2,
     output reg          ix_ip_bp,
@@ -377,6 +381,8 @@ module ix(
             ix_ip_br_neg <= dec_ix_br_neg;
             ix_ip_br_offset <= dec_ix_imm[20:0];
             ix_ip_br_base <= br_base;
+            ix_ip_br_is_call <= dec_ix_br_is_call;
+            ix_ip_br_is_ret <= dec_ix_br_is_ret;
             ix_ip_operand1 <= operand1_value;
             ix_ip_operand2 <= operand2_value;
             ix_ip_bp <= dec_ix_bp;

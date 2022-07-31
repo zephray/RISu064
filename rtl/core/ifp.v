@@ -48,6 +48,8 @@ module ifp(
     input  wire         ip_if_branch,
     input  wire         ip_if_branch_taken,
     input  wire [63:0]  ip_if_branch_pc,
+    input  wire         ip_if_branch_is_call,
+    input  wire         ip_if_branch_is_ret,
     input  wire         if_pc_override,
     input  wire [63:0]  if_new_pc
 );
@@ -316,6 +318,57 @@ module ifp(
 
     `endif
 
+    // Return Address Stack
+    reg [31:2] ras [0:`RAS_DEPTH-1];
+    reg [`RAS_DEPTH_BITS-1:0] ras_ptr_actual;
+    reg [`RAS_DEPTH_BITS-1:0] ras_ptr_speculative;
+    wire [`RAS_DEPTH_BITS-1:0] ras_ptr_sinc = ras_ptr_speculative + 1;
+    wire [`RAS_DEPTH_BITS-1:0] ras_ptr_sdec = ras_ptr_speculative - 1;
+    wire [`RAS_DEPTH_BITS-1:0] ras_ptr_actual_next =
+            (ip_if_branch_is_call) ? (ras_ptr_actual + 1) :
+            (ip_if_branch_is_ret) ? (ras_ptr_actual - 1) : (ras_ptr_actual);
+    reg [`RAS_DEPTH_BITS:0] ras_level_actual;
+    reg [`RAS_DEPTH_BITS:0] ras_level_speculative;
+    wire [`RAS_DEPTH_BITS:0] ras_level_actual_next =
+            (ip_if_branch_is_call) ? (ras_level_actual + 1) :
+            (ip_if_branch_is_ret) ? (ras_level_actual - 1) : (ras_level_actual);
+    always @(posedge clk) begin
+        if (ip_if_branch) begin
+            ras_ptr_actual <= ras_ptr_actual_next;
+            ras_level_actual <= ras_level_actual_next;
+        end
+
+        if (bu_active) begin
+            if (ip_if_branch && if_pc_override) begin
+                // RAS mispredict, correct back to actual
+                ras_ptr_speculative <= ras_ptr_actual_next;
+                ras_level_speculative <= ras_level_actual_next;
+            end
+            else if (insn_is_call) begin
+                ras[ras_ptr_sinc] <= pc_plus_4[31:2];
+                ras_ptr_speculative <= ras_ptr_sinc;
+                if (ras_level_speculative != `RAS_DEPTH)
+                    ras_level_speculative <= ras_level_speculative + 1;
+                else
+                    $display("RAS overflow");
+            end
+            else if (insn_is_ret) begin
+                ras_ptr_speculative <= ras_ptr_sdec;
+                if (ras_level_speculative != 0)
+                    ras_level_speculative <= ras_level_speculative - 1;
+            end
+        end
+
+        if (rst) begin
+            ras_ptr_actual <= 0;
+            ras_ptr_speculative <= 0;
+            ras_level_actual <= 0;
+            ras_level_speculative <= 0;
+        end
+    end
+    wire ras_hit = (insn_is_ret) && (ras_level_speculative != 0);
+    wire [63:0] ras_result = {32'b0, ras[ras_ptr_speculative], 2'b0};
+
     // TODO: Handle cases where an ifencei or something else happend so the
     // instruction at a certain PC is no longer a branch. This should be
     // corrected somewhere.
@@ -333,11 +386,12 @@ module ifp(
     always @(negedge clk) begin
         $display(""); // newline
     end*/
-
+    wire [63:0] pc_plus_4 = f1_f2_pc + 4;
     assign next_pc =
             (ifp_pc_override) ? (ifp_new_pc) : // mis-predict
+            (ras_hit) ? (ras_result) : // RAS result
             (f1_bp) ? (btb_result) : // predicted branch
-            (f1_f2_pc + 4); // PC incr
+            (pc_plus_4); // PC incr
 
     always @(posedge clk) begin
         // Continue only if pipeline is not stalled

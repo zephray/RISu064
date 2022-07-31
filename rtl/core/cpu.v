@@ -90,6 +90,8 @@ module cpu(
     wire        ip_if_branch;
     wire        ip_if_branch_taken;
     wire [63:0] ip_if_branch_pc;
+    wire        ip_if_branch_is_call;
+    wire        ip_if_branch_is_ret;
     wire        ip_if_pc_override;
     wire [63:0] ip_if_new_pc;
     wire        ix_if_pc_override;
@@ -127,6 +129,8 @@ module cpu(
         .ip_if_branch(ip_if_branch),
         .ip_if_branch_taken(ip_if_branch_taken),
         .ip_if_branch_pc(ip_if_branch_pc),
+        .ip_if_branch_is_call(ip_if_branch_is_call),
+        .ip_if_branch_is_ret(ip_if_branch_is_ret),
         .if_pc_override(if_pc_override),
         .if_new_pc(if_new_pc)
     );
@@ -142,6 +146,8 @@ module cpu(
     wire        dec_ix_br_neg;
     wire        dec_ix_br_base_src;
     wire        dec_ix_br_inj_pc;
+    wire        dec_ix_br_is_call;
+    wire        dec_ix_br_is_ret;
     wire        dec_ix_mem_sign;
     wire [1:0]  dec_ix_mem_width;
     wire [1:0]  dec_ix_csr_op;
@@ -184,6 +190,8 @@ module cpu(
         .dec_ix_br_neg(dec_ix_br_neg),
         .dec_ix_br_base_src(dec_ix_br_base_src),
         .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
+        .dec_ix_br_is_call(dec_ix_br_is_call),
+        .dec_ix_br_is_ret(dec_ix_br_is_ret),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_csr_op(dec_ix_csr_op),
@@ -217,6 +225,8 @@ module cpu(
     wire        ix_ip_br_neg;
     wire [63:0] ix_ip_br_base;
     wire [20:0] ix_ip_br_offset;
+    wire        ix_ip_br_is_call;
+    wire        ix_ip_br_is_ret;
     wire [63:0] ix_ip_operand1;
     wire [63:0] ix_ip_operand2;
     wire        ix_ip_bp;
@@ -291,6 +301,8 @@ module cpu(
         .dec_ix_br_neg(dec_ix_br_neg),
         .dec_ix_br_base_src(dec_ix_br_base_src),
         .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
+        .dec_ix_br_is_call(dec_ix_br_is_call),
+        .dec_ix_br_is_ret(dec_ix_br_is_ret),
         .dec_ix_mem_sign(dec_ix_mem_sign),
         .dec_ix_mem_width(dec_ix_mem_width),
         .dec_ix_csr_op(dec_ix_csr_op),
@@ -323,6 +335,8 @@ module cpu(
         .ix_ip_br_neg(ix_ip_br_neg),
         .ix_ip_br_base(ix_ip_br_base),
         .ix_ip_br_offset(ix_ip_br_offset),
+        .ix_ip_br_is_call(ix_ip_br_is_call),
+        .ix_ip_br_is_ret(ix_ip_br_is_ret),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
@@ -406,6 +420,8 @@ module cpu(
         .ix_ip_br_neg(ix_ip_br_neg),
         .ix_ip_br_base(ix_ip_br_base),
         .ix_ip_br_offset(ix_ip_br_offset),
+        .ix_ip_br_is_call(ix_ip_br_is_call),
+        .ix_ip_br_is_ret(ix_ip_br_is_ret),
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
@@ -426,6 +442,8 @@ module cpu(
         .ip_if_branch(ip_if_branch),
         .ip_if_branch_taken(ip_if_branch_taken),
         .ip_if_branch_pc(ip_if_branch_pc),
+        .ip_if_branch_is_call(ip_if_branch_is_call),
+        .ip_if_branch_is_ret(ip_if_branch_is_ret),
         .ip_if_pc_override(ip_if_pc_override),
         .ip_if_new_pc(ip_if_new_pc)
     );

@@ -292,10 +292,12 @@ module ix(
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
     wire ix_opr_ready = operand1_ready && operand2_ready;
     wire lsp_req_pending = ix_lsp_valid && !ix_lsp_ready;
+    wire md_req_pending = ix_md_valid && !ix_md_ready;
     wire ix_issue_common = (dec_ix_valid) && (ix_opr_ready) && !pipe_flush  &&
-            !trap_ongoing && !int_pending && !exc_pending && !lsp_req_pending;
+            !trap_ongoing && !int_pending && !exc_pending;
     wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) && (waw_ip) &&
-            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
+            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
+            (!(dec_ix_op_type == `OT_BRANCH) || (!lsp_req_pending && !md_req_pending));
     wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) && (waw_lsp) &&
             ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
     wire ix_issue_md = ix_issue_common && (ix_md_ready) && (waw_md) &&

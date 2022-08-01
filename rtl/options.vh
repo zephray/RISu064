@@ -25,6 +25,10 @@
 
 // System options
 
+// 2**BTB_ABITS == BTB_DEPTH
+`define BTB_ABITS       5
+`define BTB_DEPTH       32
+
 // 2**BHT_ABITS == BHT_DEPTH
 `define BHT_ABITS       12
 `define BHT_DEPTH       4096

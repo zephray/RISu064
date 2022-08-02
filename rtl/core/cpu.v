@@ -281,6 +281,9 @@ module cpu(
     wire        ix_trap_valid;
     wire        ix_trap_ready;
     wire [15:0] trap_ix_ip;
+    wire        wb_ix_active;
+    wire [4:0]  wb_ix_dst;
+    wire [63:0] wb_ix_value;
     ix ix(
         .clk(clk),
         .rst(rst),
@@ -365,8 +368,6 @@ module cpu(
         .lsp_unaligned_epc(lsp_unaligned_epc),
          // Hazard detection & Bypassing
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
-        .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
-        .lsp_ix_mem_dst(lsp_ix_mem_dst),
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),
         .lsp_wb_wb_en(lsp_wb_wb_en),
@@ -380,9 +381,6 @@ module cpu(
         .ix_md_muldiv(ix_md_muldiv),
         .ix_md_valid(ix_md_valid),
         .ix_md_ready(ix_md_ready),
-        // Hazard detection
-        .md_ix_dst(md_ix_dst),
-        .md_ix_active(md_ix_active),
         // To trap unit
         .ix_trap_pc(ix_trap_pc),
         .ix_trap_dst(ix_trap_dst),
@@ -396,6 +394,10 @@ module cpu(
         .ix_trap_valid(ix_trap_valid),
         .ix_trap_ready(ix_trap_ready),
         .trap_ix_ip(trap_ix_ip),
+        // From WB unit
+        .wb_ix_active(wb_ix_active),
+        .wb_ix_dst(wb_ix_dst),
+        .wb_ix_value(wb_ix_value),
         // Fence I
         .im_invalidate_req(im_invalidate_req),
         .im_invalidate_resp(im_invalidate_resp),
@@ -473,8 +475,6 @@ module cpu(
         .ix_lsp_ready(ix_lsp_ready),
         // To issue for hazard detection
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
-        .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
-        .lsp_ix_mem_dst(lsp_ix_mem_dst),
         // To writeback
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),
@@ -548,9 +548,6 @@ module cpu(
         .ix_md_muldiv(ix_md_muldiv),
         .ix_md_valid(ix_md_valid),
         .ix_md_ready(ix_md_ready),
-        // Hazard detection
-        .md_ix_dst(md_ix_dst),
-        .md_ix_active(md_ix_active),
         // To writeback
         .md_wb_dst(md_wb_dst),
         .md_wb_result(md_wb_result),
@@ -596,6 +593,10 @@ module cpu(
         .trap_wb_wb_en(trap_wb_wb_en),
         .trap_wb_valid(trap_wb_valid),
         .trap_wb_ready(trap_wb_ready),
+        // To IX unit
+        .wb_ix_active(wb_ix_active),
+        .wb_ix_dst(wb_ix_dst),
+        .wb_ix_value(wb_ix_value),
         // To trap unit
         .wb_trap_instret(wb_trap_instret)
     );

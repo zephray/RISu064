@@ -36,9 +36,6 @@ module md(
     input  wire         ix_md_muldiv,
     input  wire         ix_md_valid,
     output wire         ix_md_ready,
-    // Hazard detection
-    output wire [4:0]   md_ix_dst,
-    output wire         md_ix_active,
     // To writeback
     output wire [4:0]   md_wb_dst,
     output wire [63:0]  md_wb_result,
@@ -88,9 +85,6 @@ module md(
     );
 
     assign ix_md_ready = !active;
-
-    assign md_ix_dst = dst;
-    assign md_ix_active = active;
 
     assign md_wb_dst = dst;
     assign md_wb_result = (active_unit == `MD_MUL) ?

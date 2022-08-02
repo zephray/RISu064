@@ -69,6 +69,10 @@ module wb(
     input  wire         trap_wb_wb_en,
     input  wire         trap_wb_valid,
     output wire         trap_wb_ready,
+    // To IX for forwarding and dependency tracking
+    output wire         wb_ix_active,
+    output wire [4:0]   wb_ix_dst,
+    output wire [63:0]  wb_ix_value,
     // To trap unit
     output wire [1:0]   wb_trap_instret
 );
@@ -101,6 +105,10 @@ module wb(
             (lsp_wb_ac) ? lsp_wb_result :
             (md_wb_ac) ? md_wb_result :
             (trap_wb_ac) ? trap_wb_result : 64'bx;
+
+    assign wb_ix_active = wb_active;
+    assign wb_ix_dst = wb_dst;
+    assign wb_ix_value = wb_value;
 
     `ifdef VERBOSE
     wire [63:0] wb_pc =

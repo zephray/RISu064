@@ -70,9 +70,11 @@ static CORETIMETYPE start_time_val, stop_time_val;
    example code) or zeroing some system parameters - e.g. setting the cpu clocks
    cycles to 0.
 */
+uint64_t start_instret;
 void
 start_time(void)
 {
+    start_instret = insn();
     GETMYTIME(&start_time_val);
 }
 /* Function : stop_time
@@ -83,10 +85,12 @@ start_time(void)
    example code) or other system parameters - e.g. reading the current value of
    cpu cycles counter.
 */
+uint64_t stop_instret;
 void
 stop_time(void)
 {
     GETMYTIME(&stop_time_val);
+    stop_instret = insn();
 }
 /* Function : get_time
         Return an abstract "ticks" number that signifies time on the system.
@@ -102,6 +106,7 @@ get_time(void)
 {
     CORE_TICKS elapsed
         = (CORE_TICKS)(MYTIMEDIFF(stop_time_val, start_time_val));
+    ee_printf("Total dynamic instructions: %u\n", stop_instret - start_instret);
     return elapsed;
 }
 /* Function : time_in_secs

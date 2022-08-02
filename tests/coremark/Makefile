@@ -7,7 +7,9 @@ ASM_SRCS = $(wildcard *.S)
 C_OBJS = $(C_SRCS:.c=.o)
 ASM_OBJS = $(ASM_SRCS:.S=.o)
 OBJS := $(ASM_OBJS) $(C_OBJS)
-CFLAGS = -MD -O3 -mabi=lp64 -march=rv64im -mcmodel=medany -DTIME -DRISCV -DUSE_MYSTDLIB -DITERATIONS=20 -ffreestanding -nostdlib -Wl,--no-relax
+CFLAGS = -MD -O3 -mabi=lp64 -march=rv64im -mcmodel=medany -DTIME -DRISCV -DUSE_MYSTDLIB -DITERATIONS=10 -ffreestanding -nostdlib -fno-common -funroll-loops -finline-functions -finline-limit=1000 -fno-if-conversion2 -fselective-scheduling -fno-crossjumping -freorder-blocks-and-partition
+#CFLAGS = -MD -O3 -mabi=lp64 -march=rv64im -mcmodel=medany -DTIME -DRISCV -DUSE_MYSTDLIB -DITERATIONS=1 -ffreestanding -nostdlib
+#CFLAGS = -MD -O2 -mabi=lp64 -march=rv64im -mcmodel=medany -DTIME -DRISCV -DUSE_MYSTDLIB -DITERATIONS=10 -ffreestanding -nostdlib -fno-common -funroll-loops -finline-functions --param max-inline-insns-auto=20 -falign-functions=4 -falign-jumps=4 -falign-loops=4
 TOOLCHAIN_PREFIX = riscv64-unknown-elf-
 
 all: $(DUMP) $(BIN)

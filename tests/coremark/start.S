@@ -60,5 +60,6 @@ end_init_bss:
 
 # call main
 call main
+ebreak
 loop:
 j loop

@@ -82,6 +82,18 @@ static void printf_d(int val)
 		printf_c(*(--p));
 }
 
+static void printf_u(unsigned int val)
+{
+	char buffer[32];
+	char *p = buffer;
+	while (val || p == buffer) {
+		*(p++) = '0' + val % 10;
+		val = val / 10;
+	}
+	while (p != buffer)
+		printf_c(*(--p));
+}
+
 static void printf_x(uint32_t v, int digits) {
     for (int i = 7; i >= 0; i--) {
         char c = "0123456789abcdef"[(v >> (4*i)) & 15];
@@ -111,6 +123,10 @@ int printf(const char *format, ...)
 				}
 				if (format[i] == 'd') {
 					printf_d(va_arg(ap,int));
+					break;
+				}
+				if (format[i] == 'u') {
+					printf_u(va_arg(ap,int));
 					break;
 				}
 				if (format[i] == 'x') {

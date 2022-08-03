@@ -60,6 +60,10 @@ bool unlimited = true;
 bool verbose = false;
 uint64_t max_cycles;
 
+uint64_t stall_ipe;
+uint64_t stall_lag;
+uint64_t stall_lma;
+uint64_t stall_md;
 uint64_t if_nr_count;
 uint64_t pc_override_count;
 uint64_t branch_count;
@@ -173,7 +177,19 @@ void tick() {
     core->eval();
 
     if (enable_stat) {
-        if (SIGNAL(dec_ix_valid) == 0) {
+        if (SIGNAL(dec_ix_valid) == 1) {
+            // Could issue, did it issue?
+            if (SIGNAL(ix__DOT__dbg_stl_ipe)[0] || SIGNAL(ix__DOT__dbg_stl_ipe[1]))
+                stall_ipe++;
+            if (SIGNAL(ix__DOT__dbg_stl_lag)[0] || SIGNAL(ix__DOT__dbg_stl_lag[1]))
+                stall_lag++;
+            if (SIGNAL(ix__DOT__dbg_stl_lma)[0] || SIGNAL(ix__DOT__dbg_stl_lma[1]))
+                stall_lma++;
+            if (SIGNAL(ix__DOT__dbg_stl_mdi)[0] || SIGNAL(ix__DOT__dbg_stl_mdi[1]))
+                stall_md++;
+        }
+        else {
+            // Couldn't issue, why?
             if_nr_count++;
         }
 
@@ -228,6 +244,10 @@ void reset() {
     // Reset them here for stat purposes
     SIGNAL(trap__DOT__minstret) = 0;
     SIGNAL(trap__DOT__mcycle) = 0;
+    stall_ipe = 0;
+    stall_lag = 0;
+    stall_lma = 0;
+    stall_md = 0;
     if_nr_count = 0;
     taken_count = 0;
     pc_override_count = 0;
@@ -369,9 +389,9 @@ int main(int argc, char *argv[]) {
         printf("Simulation stopped after %ld cycles,\n"
                 "average simulation speed: %ld kHz.\n",
                 tickcount, tickcount / time);
-        /*for (int i = 0; i < 31; i++) {
+        for (int i = 0; i < 31; i++) {
             printf("R%d = %016lx\n", i + 1, SIGNAL(rf__DOT__rf_array[i]));
-        }*/
+        }
 
         uint64_t instret = SIGNAL(trap__DOT__minstret);
         uint64_t cycle = SIGNAL(trap__DOT__mcycle);
@@ -386,6 +406,10 @@ int main(int argc, char *argv[]) {
         printf("Total backend stall: %lu\n", total_stall);
         printf("Bubbles due to branching: %lu\n", mispredict_count * 2);
         printf("Stall due to insufficient IFQ: %lu\n", if_nr_count - mispredict_count * 2);
+        printf("Stall due to integer EU busy (WB limited): %lu\n", stall_ipe);
+        printf("Stall due to load store structural latency: %lu\n", stall_lag);
+        printf("Stall due to load store memory latency: %lu\n", stall_lma);
+        printf("Stall due to multiply/ divide unit busy: %lu\n", stall_md);
         printf("Stall due to WAW on integer EU: %lu\n", SIGNAL(ix__DOT__dbg_stl_ip0waw_cntr));
         printf("Stall due to WAW on load store: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
         printf("Stall due to WAW on multiply: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
@@ -394,7 +418,7 @@ int main(int argc, char *argv[]) {
         if (branch_count != 0) {
             printf("Taken branches: %lu (%ld%%)\n", taken_count, taken_count * 100 / branch_count);
             printf("Branch predictor correct: %lu (%ld%%)\n", predicted, predicted * 100 / branch_count);
-            printf("BTB miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
+            printf("BHT miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
             printf("Combined mistaken branches: %lu (Correct %ld%%)\n", mispredict_count,
                     100 - mispredict_count * 100 / branch_count);
         }

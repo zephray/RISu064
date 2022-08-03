@@ -51,6 +51,8 @@ module lsp(
     output wire         ix_lsp_ready,
     // To issue for hazard detection
     output wire         lsp_ix_mem_busy,
+    output wire         lsp_ix_mem_wb_en,
+    output wire [4:0]   lsp_ix_mem_dst,
     // To writeback
     output wire [4:0]   lsp_wb_dst,
     output wire [63:0]  lsp_wb_result,
@@ -74,8 +76,8 @@ module lsp(
     wire lsp_stalled_back_pressure = (!lsp_wb_ready) && !rst;
     wire lsp_stalled = lsp_stalled_memory_resp || lsp_stalled_back_pressure;
     reg lsp_stalled_last;
-    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last &&
-            !(lsp_memreq_last && !dm_req_ready));
+    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last && !(lsp_memreq_last && !dm_req_ready));
+    wire lsp_memreq_nack = dm_req_valid && !dm_req_ready;
     reg lsp_memreq_last;
 
     reg ag_m_valid;
@@ -158,6 +160,8 @@ module lsp(
 
     // For hazard detection
     assign lsp_ix_mem_busy = dm_req_valid || lsp_stalled;
+    assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
+    assign lsp_ix_mem_dst = ag_m_dst;
 
     // Memory stage
     reg m_wb_req_valid;

@@ -36,6 +36,7 @@ module ix(
     // IX interface
     input  wire [63:0]  dec_ix_pc,
     input  wire         dec_ix_bp,
+    input  wire [1:0]   dec_ix_bp_track,
     input  wire [63:0]  dec_ix_bt,
     input  wire [3:0]   dec_ix_op,
     input  wire         dec_ix_option,
@@ -83,6 +84,7 @@ module ix(
     output reg  [63:0]  ix_ip_operand1,
     output reg  [63:0]  ix_ip_operand2,
     output reg          ix_ip_bp,
+    output reg  [1:0]   ix_ip_bp_track,
     output reg  [63:0]  ix_ip_bt,
     output reg          ix_ip_valid,
     input  wire         ix_ip_ready,
@@ -402,6 +404,7 @@ module ix(
             ix_ip_operand1 <= operand1_value;
             ix_ip_operand2 <= operand2_value;
             ix_ip_bp <= dec_ix_bp;
+            ix_ip_bp_track <= dec_ix_bp_track;
             ix_ip_bt <= dec_ix_bt;
             ix_ip_wb_en <= dec_ix_wb_en;
             ix_ip_dst <= dec_ix_rd;

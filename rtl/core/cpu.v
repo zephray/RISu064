@@ -84,6 +84,7 @@ module cpu(
     wire [63:0] if_dec_pc;
     wire [31:0] if_dec_instr;
     wire        if_dec_bp;
+    wire [1:0]  if_dec_bp_track;
     wire [63:0] if_dec_bt;
     wire        if_dec_valid;
     wire        if_dec_ready;
@@ -92,6 +93,7 @@ module cpu(
     wire [63:0] ip_if_branch_pc;
     wire        ip_if_branch_is_call;
     wire        ip_if_branch_is_ret;
+    wire [1:0]  ip_if_branch_track;
     wire        ip_if_pc_override;
     wire [63:0] ip_if_new_pc;
     wire        ix_if_pc_override;
@@ -122,6 +124,7 @@ module cpu(
         .if_dec_pc(if_dec_pc),
         .if_dec_instr(if_dec_instr),
         .if_dec_bp(if_dec_bp),
+        .if_dec_bp_track(if_dec_bp_track),
         .if_dec_bt(if_dec_bt),
         .if_dec_valid(if_dec_valid),
         .if_dec_ready(if_dec_ready),
@@ -131,6 +134,7 @@ module cpu(
         .ip_if_branch_pc(ip_if_branch_pc),
         .ip_if_branch_is_call(ip_if_branch_is_call),
         .ip_if_branch_is_ret(ip_if_branch_is_ret),
+        .ip_if_branch_track(ip_if_branch_track),
         .if_pc_override(if_pc_override),
         .if_new_pc(if_new_pc)
     );
@@ -138,6 +142,7 @@ module cpu(
     // Decode stage
     wire [63:0] dec_ix_pc;
     wire        dec_ix_bp;
+    wire [1:0]  dec_ix_bp_track;
     wire [63:0] dec_ix_bt;
     wire [3:0]  dec_ix_op;
     wire        dec_ix_option;
@@ -176,12 +181,14 @@ module cpu(
         .if_dec_pc(if_dec_pc),
         .if_dec_instr(if_dec_instr),
         .if_dec_bp(if_dec_bp),
+        .if_dec_bp_track(if_dec_bp_track),
         .if_dec_bt(if_dec_bt),
         .if_dec_valid(if_dec_valid),
         .if_dec_ready(if_dec_ready),
         // IX interface
         .dec_ix_pc(dec_ix_pc),
         .dec_ix_bp(dec_ix_bp),
+        .dec_ix_bp_track(dec_ix_bp_track),
         .dec_ix_bt(dec_ix_bt),
         .dec_ix_op(dec_ix_op),
         .dec_ix_option(dec_ix_option),
@@ -230,6 +237,7 @@ module cpu(
     wire [63:0] ix_ip_operand1;
     wire [63:0] ix_ip_operand2;
     wire        ix_ip_bp;
+    wire [1:0]  ix_ip_bp_track;
     wire [63:0] ix_ip_bt;
     wire        ix_ip_valid;
     wire        ix_ip_ready;
@@ -296,6 +304,7 @@ module cpu(
         // IX interface
         .dec_ix_pc(dec_ix_pc),
         .dec_ix_bp(dec_ix_bp),
+        .dec_ix_bp_track(dec_ix_bp_track),
         .dec_ix_bt(dec_ix_bt),
         .dec_ix_op(dec_ix_op),
         .dec_ix_option(dec_ix_option),
@@ -343,6 +352,7 @@ module cpu(
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
+        .ix_ip_bp_track(ix_ip_bp_track),
         .ix_ip_bt(ix_ip_bt),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
@@ -432,6 +442,7 @@ module cpu(
         .ix_ip_operand1(ix_ip_operand1),
         .ix_ip_operand2(ix_ip_operand2),
         .ix_ip_bp(ix_ip_bp),
+        .ix_ip_bp_track(ix_ip_bp_track),
         .ix_ip_bt(ix_ip_bt),
         .ix_ip_valid(ix_ip_valid),
         .ix_ip_ready(ix_ip_ready),
@@ -451,6 +462,7 @@ module cpu(
         .ip_if_branch_pc(ip_if_branch_pc),
         .ip_if_branch_is_call(ip_if_branch_is_call),
         .ip_if_branch_is_ret(ip_if_branch_is_ret),
+        .ip_if_branch_track(ip_if_branch_track),
         .ip_if_pc_override(ip_if_pc_override),
         .ip_if_new_pc(ip_if_new_pc)
     );

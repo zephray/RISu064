@@ -37,15 +37,22 @@
 //`define BPU_ALWAYS_NOT_TAKEN
 //`define BPU_ALWAYS_TAKEN
 //`define BPU_SIMPLE
-`define BPU_GLOBAL
 //`define BPU_GLOBAL_BIMODAL
-`define BPU_GLOBAL_GSHARE
+//`define BPU_GLOBAL_GSHARE
 //`define BPU_GLOBAL_GSELECT
+`define BPU_TOURNAMENT
 
-`ifdef BPU_GLOBAL_GSELECT
-`define BPU_GHR_WIDTH   3
+`ifdef BPU_GLOBAL_BIMODAL
+    `define BPU_GLOBAL
+`elsif BPU_GLOBAL_GSELECT
+    `define BPU_GLOBAL
+    `define BPU_GHR_WIDTH   3
 `elsif BPU_GLOBAL_GSHARE
-`define BPU_GHR_WIDTH   `BHT_ABITS
+    `define BPU_GLOBAL
+    `define BPU_GHR_WIDTH   `BHT_ABITS
+`elsif BPU_TOURNAMENT
+    `define BPU_GLOBAL
+    `define BPU_GHR_WIDTH   `BHT_ABITS
 `endif
 
 // 2**RAS_DEPTH_BITS == RAS_DEPTH

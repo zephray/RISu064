@@ -34,12 +34,14 @@ module dec(
     input  wire [63:0]  if_dec_pc,
     input  wire [31:0]  if_dec_instr,
     input  wire         if_dec_bp,
+    input  wire [1:0]   if_dec_bp_track,
     input  wire [63:0]  if_dec_bt,
     input  wire         if_dec_valid,
     output wire         if_dec_ready,
     // IX interface
     output reg  [63:0]  dec_ix_pc,
     output reg          dec_ix_bp,
+    output reg  [1:0]   dec_ix_bp_track,
     output reg  [63:0]  dec_ix_bt,
     output reg  [3:0]   dec_ix_op,
     output reg          dec_ix_option,
@@ -148,6 +150,7 @@ module dec(
         if (if_dec_ready) begin
             dec_ix_pc <= if_dec_pc;
             dec_ix_bp <= if_dec_bp;
+            dec_ix_bp_track <= if_dec_bp_track;
             dec_ix_bt <= if_dec_bt;
             dec_ix_op <= dec_op;
             dec_ix_option <= dec_option;

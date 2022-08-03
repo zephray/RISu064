@@ -45,6 +45,7 @@ module ip(
     input  wire [63:0]  ix_ip_operand1,
     input  wire [63:0]  ix_ip_operand2,
     input  wire         ix_ip_bp,
+    input  wire [1:0]   ix_ip_bp_track,
     input  wire [63:0]  ix_ip_bt,
     input  wire         ix_ip_valid,
     output wire         ix_ip_ready,
@@ -64,6 +65,7 @@ module ip(
     output reg  [63:0]  ip_if_branch_pc,
     output reg          ip_if_branch_is_call,
     output reg          ip_if_branch_is_ret,
+    output reg  [1:0]   ip_if_branch_track,
     output reg          ip_if_pc_override,
     output reg  [63:0]  ip_if_new_pc
 );
@@ -109,6 +111,7 @@ module ip(
             ip_if_branch_pc <= ix_ip_pc;
             ip_if_branch_is_call <= ix_ip_br_is_call;
             ip_if_branch_is_ret <= ix_ip_br_is_ret;
+            ip_if_branch_track <= ix_ip_bp_track;
             ip_if_new_pc <= ip_if_new_pc_comb;
         end
 

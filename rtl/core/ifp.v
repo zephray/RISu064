@@ -40,6 +40,7 @@ module ifp(
     output wire [63:0]  if_dec_pc,
     output wire [31:0]  if_dec_instr,
     output wire         if_dec_bp,
+    output wire [1:0]   if_dec_bp_track,
     output wire [63:0]  if_dec_bt,
     output wire         if_dec_valid,
     input  wire         if_dec_ready,
@@ -50,6 +51,7 @@ module ifp(
     input  wire [63:0]  ip_if_branch_pc,
     input  wire         ip_if_branch_is_call,
     input  wire         ip_if_branch_is_ret,
+    input  wire [1:0]   ip_if_branch_track,
     input  wire         if_pc_override,
     input  wire [63:0]  if_new_pc
 );
@@ -161,9 +163,11 @@ module ifp(
     `ifdef BPU_ALWAYS_NOT_TAKEN
     wire bp_result = `BP_NOT_TAKEN;
     wire bp_init_active = 0;
+    wire [1:0] bp_track = 2'b0;
     `elsif BPU_ALWAYS_TAKEN
     wire bp_result = `BP_TAKEN;
     wire bp_init_active = 0;
+    wire [1:0] bp_track = 2'b0;
     `elsif BPU_SIMPLE
     wire bp_init_active = 0;
     reg [1:0] bp_counter;
@@ -181,28 +185,8 @@ module ifp(
         end
     end
     wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire [1:0] bp_track = 2'b0;
     `elsif BPU_GLOBAL
-    wire [1:0] bp_counter;
-    wire [`BHT_ABITS-1:0] bp_index;
-    wire [`BHT_ABITS-1:0] bp_wr_index;
-    wire [1:0] bp_wr_data;
-    wire bp_wr_en;
-    wire [1:0] bp_update_counter;
-    wire bp_update_ren;
-    /*ram_4096_2 bpu_ram(*/
-    ram_customize #(.DBITS(2), .ABITS(`BHT_ABITS)) bpu_ram(
-        .clk(clk),
-        .rst(rst),
-        .addr0(bp_wr_index),
-        .re0(bp_update_ren),
-        .rd0(bp_update_counter),
-        .wr0(bp_wr_data),
-        .we0(bp_wr_en),
-        .addr1(bp_index),
-        .re1(bu_active),
-        .rd1(bp_counter)
-    );
-
     // BP initializer
     reg bp_init_active = 1'b0;
     reg [`BHT_ABITS-1:0] bp_init_index;
@@ -217,66 +201,6 @@ module ifp(
             bp_init_active <= 1'b1;
             bp_init_index <= 0;
         end
-    end
-
-    assign bp_wr_index = (bp_init_active) ? (bp_init_index) : (bp_update_fifo_index);
-    wire [1:0] bp_wr_data = (bp_init_active) ? (2'd1) : (bp_update_data);
-    wire bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
-
-    /*reg [`BHT_ABITS-1:0] dbg_bp_index;
-    always @(posedge clk) begin
-        if (bp_update_en) begin
-            $display("BP Index %03x updated to %d", bp_update_fifo_index, bp_update_data);
-        end
-
-        dbg_bp_index <= bp_index;
-        if (bu_active && insn_is_branch) begin
-            $display("PC %08x predicted to be %d from index %03x %d", f1_f2_pc, bp_result, dbg_bp_index, bp_counter);
-        end
-
-        if (ip_if_branch) begin
-            if (ip_if_branch_taken)
-                $display("PC %08x branch taken", ip_if_branch_pc);
-            else
-                $display("PC %08x branch not taken", ip_if_branch_pc);
-        end
-    end*/
-
-    reg bp_update_fifo_ready;
-    wire bp_update_fifo_valid;
-    wire [`BHT_ABITS-1:0] bp_update_fifo_index;
-    wire bp_update_fifo_taken;
-    wire bp_update_fifo_input_ready;
-    fifo_nd #(.WIDTH(`BHT_ABITS+1), .ABITS(2)) bp_update_fifo (
-        .clk(clk),
-        .rst(rst),
-        .a_data({bp_update_index, ip_if_branch_taken}),
-        .a_valid(ip_if_branch),
-        .a_ready(bp_update_fifo_input_ready),
-        .a_almost_full(),
-        .b_data({bp_update_fifo_index, bp_update_fifo_taken}),
-        .b_valid(bp_update_fifo_valid),
-        .b_ready(bp_update_fifo_ready)
-    );
-
-    // Happnes, but rare. Shouldn't affect performance much
-    /*always @(posedge clk) begin
-        if (!bp_update_fifo_input_ready && ip_if_branch) begin
-            $display("BP update queue overflow");
-        end
-    end*/
-
-    wire [1:0] bp_counter_inc = (bp_update_counter == 2'b11) ? 2'b11 : bp_update_counter + 1;
-    wire [1:0] bp_counter_dec = (bp_update_counter == 2'b00) ? 2'b00 : bp_update_counter - 1;
-    wire [`BHT_ABITS-1:0] bp_update_index;
-    wire [1:0] bp_update_data = (bp_update_fifo_taken) ? bp_counter_inc : bp_counter_dec;
-    wire bp_update_ren = !bp_update_fifo_ready && bp_update_fifo_valid; // R
-    wire bp_update_en = bp_update_fifo_ready && bp_update_fifo_valid; // W
-    always @(posedge clk) begin
-        if (bp_update_fifo_ready)
-            bp_update_fifo_ready <= 1'b0;
-        else
-            bp_update_fifo_ready <= bp_update_fifo_valid;
     end
 
     // Global history register
@@ -321,19 +245,149 @@ module ifp(
 
     `endif
 
+    `ifdef BPU_GHR_WIDTH
+    wire [`BHT_ABITS-1:0] bp_gsh_update_index =
+            branch_history_w ^ ip_if_branch_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_gsh_index =
+            branch_history_r ^ next_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_gsl_update_index =
+            {branch_history_w, ip_if_branch_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
+    wire [`BHT_ABITS-1:0] bp_gsl_index =
+            {branch_history_r, next_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
+    `endif
+    wire [`BHT_ABITS-1:0] bp_bm_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_bm_index = next_pc[`BHT_ABITS+1:2];
+
+    `ifdef BPU_TOURNAMENT
+    // Tournament predictor
+    // P1 use Bimodal, P2 use GSHARE
+    wire [`BHT_ABITS-1:0] bp_p1_update_index = bp_bm_update_index;
+    wire [`BHT_ABITS-1:0] bp_p1_index = bp_bm_index;
+    wire [`BHT_ABITS-1:0] bp_p2_update_index = bp_gsh_update_index;
+    wire [`BHT_ABITS-1:0] bp_p2_index = bp_gsh_index;
+    
+    wire [1:0] bp_p1_counter;
+    wire [1:0] bp_p2_counter;
+
+    bp_base p1(
+        .clk(clk),
+        .rst(rst),
+        .bp_active(bu_active),
+        .bp_update(ip_if_branch),
+        .bp_update_taken(ip_if_branch_taken),
+        .bp_init_active(bp_init_active),
+        .bp_init_index(bp_init_index),
+        .bp_index(bp_p1_index),
+        .bp_update_index(bp_p1_update_index),
+        .bp_counter(bp_p1_counter)
+    );
+
+    bp_base p2(
+        .clk(clk),
+        .rst(rst),
+        .bp_active(bu_active),
+        .bp_update(ip_if_branch),
+        .bp_update_taken(ip_if_branch_taken),
+        .bp_init_active(bp_init_active),
+        .bp_init_index(bp_init_index),
+        .bp_index(bp_p2_index),
+        .bp_update_index(bp_p2_update_index),
+        .bp_counter(bp_p2_counter)
+    );
+
+    // Selector
+    wire [`BHT_ABITS-1:0] bp_sel_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_sel_index = next_pc[`BHT_ABITS+1:2];
+    wire bp_sel_update;
+    wire bp_sel_update_val; // 0 - leaning towards P1, 1 - leaning towards P2
+    
+    wire [1:0] bp_sel_counter;
+    bp_base bp_selector (
+        .clk(clk),
+        .rst(rst),
+        .bp_active(bu_active),
+        .bp_update(bp_sel_update),
+        .bp_update_taken(bp_sel_update_val),
+        .bp_init_active(bp_init_active),
+        .bp_init_index(bp_init_index),
+        .bp_index(bp_sel_index),
+        .bp_update_index(bp_sel_update_index),
+        .bp_counter(bp_sel_counter)
+    );
+
+    /*always @(posedge clk) begin
+        if (bu_active && insn_is_branch) begin
+            $display("PC %08x predicted to be %d %d, selecting %d with %d",
+                f1_f2_pc, bp_p1_counter, bp_p2_counter, selected_counter, bp_sel_counter);
+        end
+
+        if (ip_if_branch) begin
+            if (ip_if_branch_taken)
+                $display("PC %08x branch taken", ip_if_branch_pc);
+            else
+                $display("PC %08x branch not taken", ip_if_branch_pc);
+            if (bp_p1_correct) begin
+                $display("P1 was correct");
+            end
+            else begin
+                $display("P1 was incorrect");
+            end
+            if (bp_p2_correct) begin
+                $display("P2 was correct");
+            end
+            else begin
+                $display("P2 was incorrect");
+            end
+            if (bp_sel_update) begin
+                $display("Updating selector to %d from %b", bp_sel_update_val, ip_if_branch_track);
+            end
+            else begin
+                $display("Not updating selector from %b", ip_if_branch_track);
+            end
+        end
+    end*/
+
+    // Update when predictors results diverge
+    assign bp_sel_update = ip_if_branch &&
+            ((ip_if_branch_track != 2'b00) && (ip_if_branch_track != 2'b11));
+    wire bp_p1_correct = ip_if_branch_track[1] == ip_if_branch_taken;
+    wire bp_p2_correct = ip_if_branch_track[0] == ip_if_branch_taken;
+    assign bp_sel_update_val = bp_p2_correct; // Used only when results diverge
+
+    wire [1:0] selected_counter = bp_sel_counter[1] ?
+            bp_p2_counter : bp_p1_counter;
+    wire bp_result = selected_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire [1:0] bp_track = {bp_p1_counter[1], bp_p2_counter[1]};
+
+    `else
+    // Single predictor
     `ifdef BPU_GLOBAL_GSHARE
-    assign bp_update_index = branch_history_w ^ ip_if_branch_pc[`BHT_ABITS+1:2];
-    assign bp_index = branch_history_r ^ next_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_update_index = bp_gsh_update_index;
+    wire [`BHT_ABITS-1:0] bp_index = bp_gsh_index;
     `elsif BPU_GLOBAL_GSELECT
-    assign bp_update_index = {branch_history_w, ip_if_branch_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
-    assign bp_index = {branch_history_r, next_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
+    wire [`BHT_ABITS-1:0] bp_update_index = bp_gsl_update_index;
+    wire [`BHT_ABITS-1:0] bp_index = bp_gsl_index;
     `elsif BPU_GLOBAL_BIMODAL
-    assign bp_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
-    assign bp_index = next_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_update_index = bp_bm_update_index;
+    wire [`BHT_ABITS-1:0] bp_index = bp_bm_index;
     `endif
 
+    wire [1:0] bp_counter;
+    bp_base bp(
+        .clk(clk),
+        .rst(rst),
+        .bp_active(bu_active),
+        .bp_update(ip_if_branch),
+        .bp_update_taken(ip_if_branch_taken),
+        .bp_init_active(bp_init_active),
+        .bp_init_index(bp_init_index),
+        .bp_index(bp_index),
+        .bp_update_index(bp_update_index),
+        .bp_counter(bp_counter)
+    );
     wire bp_result = bp_counter[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
-
+    wire [1:0] bp_track = 2'b0;
+    `endif
     `endif
 
     // Return Address Stack
@@ -462,16 +516,16 @@ module ifp(
     wire if_dec_pc_override;
     wire fifo_valid;
 
-    fifo_2d #(.WIDTH(162)) if_fifo (
+    fifo_2d #(.WIDTH(164)) if_fifo (
         .clk(clk),
         .rst(rst || ifp_pc_override),
-        .a_data({im_instr, f1_f2_pc, bp_result, next_pc, ifp_pc_override}),
+        .a_data({im_instr, f1_f2_pc, bp_result, bp_track, next_pc, ifp_pc_override}),
         .a_valid(im_resp_valid),
         /* verilator lint_off PINCONNECTEMPTY */
         .a_ready(),
         /* verilator lint_on PINCONNECTEMPTY */
         .a_almost_full(fifo_bp),
-        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bt, if_dec_pc_override}),
+        .b_data({if_dec_instr, if_dec_pc, if_dec_bp, if_dec_bp_track, if_dec_bt, if_dec_pc_override}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)
     );

@@ -49,5 +49,5 @@
 `endif
 
 // 2**RAS_DEPTH_BITS == RAS_DEPTH
-`define RAS_DEPTH       16
-`define RAS_DEPTH_BITS  4
+`define RAS_DEPTH       8
+`define RAS_DEPTH_BITS  3

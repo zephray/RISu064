@@ -281,6 +281,9 @@ module cpu(
     wire        ix_trap_valid;
     wire        ix_trap_ready;
     wire [15:0] trap_ix_ip;
+    wire [63:0] wb_ix_buf_value;
+    wire [4:0]  wb_ix_buf_dst;
+    wire        wb_ix_buf_valid;
     ix ix(
         .clk(clk),
         .rst(rst),
@@ -396,6 +399,10 @@ module cpu(
         .ix_trap_valid(ix_trap_valid),
         .ix_trap_ready(ix_trap_ready),
         .trap_ix_ip(trap_ix_ip),
+        // From WB unit
+        .wb_ix_buf_value(wb_ix_buf_value),
+        .wb_ix_buf_dst(wb_ix_buf_dst),
+        .wb_ix_buf_valid(wb_ix_buf_valid),
         // Fence I
         .im_invalidate_req(im_invalidate_req),
         .im_invalidate_resp(im_invalidate_resp),
@@ -596,6 +603,10 @@ module cpu(
         .trap_wb_wb_en(trap_wb_wb_en),
         .trap_wb_valid(trap_wb_valid),
         .trap_wb_ready(trap_wb_ready),
+        // To IX unit
+        .wb_ix_buf_value(wb_ix_buf_value),
+        .wb_ix_buf_dst(wb_ix_buf_dst),
+        .wb_ix_buf_valid(wb_ix_buf_valid),
         // To trap unit
         .wb_trap_instret(wb_trap_instret)
     );

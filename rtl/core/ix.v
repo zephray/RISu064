@@ -139,6 +139,10 @@ module ix(
     output reg          ix_trap_valid,
     input  wire         ix_trap_ready,
     input  wire [15:0]  trap_ix_ip,
+    // From WB
+    input  wire [63:0]  wb_ix_buf_value,
+    input  wire [4:0]   wb_ix_buf_dst,
+    input  wire         wb_ix_buf_valid,
     // Fence I
     output reg          im_invalidate_req,
     input  wire         im_invalidate_resp,
@@ -192,6 +196,15 @@ module ix(
                 // Register read
                 rs_val[i] = (rf_rsrc[i] == 5'd0) ? (64'd0) : rf_rdata[i];
 
+                // Must be from late to early in case there are WAW dependencies
+                // The ordering only applies to within the FU: inter-FU
+                // (non-deterministic) WAW is handled previously.
+
+                // Forwarding point: WB buffer
+                if (wb_ix_buf_valid && (wb_ix_buf_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = wb_ix_buf_value;
+                end
                 // Forwarding point: IP writeback
                 if (ip_wb_active && (ip_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;

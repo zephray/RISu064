@@ -69,9 +69,19 @@ module wb(
     input  wire         trap_wb_wb_en,
     input  wire         trap_wb_valid,
     output wire         trap_wb_ready,
+    // To IX for forwarding
+    output wire [63:0]  wb_ix_buf_value,
+    output wire [4:0]   wb_ix_buf_dst,
+    output wire         wb_ix_buf_valid,
     // To trap unit
     output wire [1:0]   wb_trap_instret
 );
+
+    // Buffer up to 1 wb request when collision is detected
+    reg [63:0] wb_buf;
+    reg [4:0] wb_buf_dst;
+    reg wb_buf_valid;
+    reg [63:0] wb_buf_pc;
 
     // Writeback
     wire ip_wb_req = ip_wb_valid && ip_wb_wb_en;
@@ -83,31 +93,68 @@ module wb(
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
-    // Current priority: md > lsp > ip > trap. Though trap shouldn't have
-    // collision with other types
+    // Current priority: md > buf > lsp > ip > trap. Though trap shouldn't have
+    // collision with other types. The buf should probably be prioritized more
+    // To ensure data flowing.
     wire md_wb_ac = md_wb_req && !ip_wb_hipri;
-    wire lsp_wb_ac = (!md_wb_ac && !ip_wb_hipri) && lsp_wb_req;
-    wire ip_wb_ac = (!md_wb_ac && !lsp_wb_ac) && ip_wb_req;
-    wire trap_wb_ac = (!md_wb_ac && !lsp_wb_ac && !ip_wb_ac) && trap_wb_req;
+    wire buf_wb_ac = (!md_wb_ac && !ip_wb_hipri) && wb_buf_valid;
+    wire lsp_wb_ac = (!md_wb_ac && !buf_wb_ac && !ip_wb_hipri) && lsp_wb_req;
+    wire ip_wb_ac = (!md_wb_ac && !buf_wb_ac && !lsp_wb_ac) && ip_wb_req;
+    wire trap_wb_ac = (!md_wb_ac && !buf_wb_ac && !lsp_wb_ac && !ip_wb_ac) && trap_wb_req;
 
-    wire wb_active = ip_wb_ac || lsp_wb_ac || md_wb_ac || trap_wb_ac;
+    // Allow write to buffer either its empty or the value will be used this
+    // cycle
+    wire wb_buf_wr_common = !wb_buf_valid || buf_wb_ac;
+    wire wb_buf_src_lsp = lsp_wb_req && !lsp_wb_ac && wb_buf_wr_common;
+    wire wb_buf_src_ip = ip_wb_req && !wb_buf_src_lsp && !ip_wb_ac && wb_buf_wr_common;
+
+    wire wb_active = ip_wb_ac || lsp_wb_ac || md_wb_ac || trap_wb_ac || buf_wb_ac;
     wire [4:0] wb_dst =
             (ip_wb_ac) ? ip_wb_dst :
             (lsp_wb_ac) ? lsp_wb_dst :
             (md_wb_ac) ? md_wb_dst :
-            (trap_wb_ac) ? trap_wb_dst: 5'bx;
+            (trap_wb_ac) ? trap_wb_dst :
+            (buf_wb_ac) ? wb_buf_dst : 5'bx;
     wire [63:0] wb_value =
             (ip_wb_ac) ? ip_wb_result :
             (lsp_wb_ac) ? lsp_wb_result :
             (md_wb_ac) ? md_wb_result :
-            (trap_wb_ac) ? trap_wb_result : 64'bx;
+            (trap_wb_ac) ? trap_wb_result :
+            (buf_wb_ac) ? wb_buf : 64'bx;
+
+    always @(posedge clk) begin
+        if (buf_wb_ac) begin
+            wb_buf_valid <= 1'b0;
+        end
+        if (wb_buf_src_lsp) begin
+            wb_buf <= lsp_wb_result;
+            wb_buf_dst <= lsp_wb_dst;
+            wb_buf_valid <= 1'b1;
+            wb_buf_pc <= lsp_wb_pc;
+        end
+        if (wb_buf_src_ip) begin
+            wb_buf <= ip_wb_result;
+            wb_buf_dst <= ip_wb_dst;
+            wb_buf_valid <= 1'b1;
+            wb_buf_pc <= ip_wb_pc;
+        end
+
+        if (rst) begin
+            wb_buf_valid <= 1'b0;
+        end
+    end
+
+    assign wb_ix_buf_dst = wb_buf_dst;
+    assign wb_ix_buf_value = wb_buf;
+    assign wb_ix_buf_valid = wb_buf_valid;
 
     `ifdef VERBOSE
     wire [63:0] wb_pc =
             (ip_wb_ac) ? ip_wb_pc :
             (lsp_wb_ac) ? lsp_wb_pc :
             (md_wb_ac) ? md_wb_pc :
-            (trap_wb_ac) ? trap_wb_pc : 64'bx;
+            (trap_wb_ac) ? trap_wb_pc :
+            (buf_wb_ac) ? wb_buf_pc : 64'bx;
     always @(posedge clk) begin
         begin
             if (wb_active) begin
@@ -131,8 +178,8 @@ module wb(
     assign rf_wdata = wb_value;
 
     // Acknowledge accepted wb, always acknowledge retire without writeback
-    assign ip_wb_ready = !(ip_wb_valid && (!ip_wb_ac && !ip_rwowb_req));
-    assign lsp_wb_ready = !(lsp_wb_valid && (!lsp_wb_ac && !lsp_rwowb_req));
+    assign ip_wb_ready = !(ip_wb_valid && (!ip_wb_ac && !ip_rwowb_req && !wb_buf_src_ip));
+    assign lsp_wb_ready = !(lsp_wb_valid && (!lsp_wb_ac && !lsp_rwowb_req && !wb_buf_src_lsp));
     assign md_wb_ready = !(md_wb_valid && !md_wb_ac);
     assign trap_wb_ready = !(trap_wb_valid && (!trap_wb_ac && !trap_rwowb_req));
 

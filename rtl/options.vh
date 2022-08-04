@@ -58,3 +58,6 @@
 // 2**RAS_DEPTH_BITS == RAS_DEPTH
 `define RAS_DEPTH       8
 `define RAS_DEPTH_BITS  3
+
+// Enable forwarding from MEM to IX, may reduce Fmax
+`define ENABLE_MEM_FORWARING

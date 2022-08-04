@@ -30,10 +30,10 @@ module lsp(
     input  wire         clk,
     input  wire         rst,
     // D-mem interface
-    output reg  [63:0]  dm_req_addr,
-    output reg  [63:0]  dm_req_wdata,
-    output reg  [7:0]   dm_req_wmask,
-    output reg          dm_req_wen,
+    output wire [63:0]  dm_req_addr,
+    output wire [63:0]  dm_req_wdata,
+    output wire [7:0]   dm_req_wmask,
+    output wire         dm_req_wen,
     output wire         dm_req_valid,
     input  wire         dm_req_ready,
     input  wire [63:0]  dm_resp_rdata,
@@ -50,9 +50,11 @@ module lsp(
     input  wire         ix_lsp_valid,
     output wire         ix_lsp_ready,
     // To issue for hazard detection
-    output wire         lsp_ix_mem_busy,
+    output reg          lsp_ix_mem_busy,
     output wire         lsp_ix_mem_wb_en,
     output wire [4:0]   lsp_ix_mem_dst,
+    output wire         lsp_ix_mem_result_valid,
+    output wire [63:0]  lsp_ix_mem_result,
     // To writeback
     output wire [4:0]   lsp_wb_dst,
     output wire [63:0]  lsp_wb_result,
@@ -67,18 +69,12 @@ module lsp(
     output reg          lsp_unaligned_store,
     output wire [63:0]  lsp_unaligned_epc
 );
-
+    // Warning: this unit doesn't have enough internal buffer to be stalled
+    // for more than 1 cycle. The WB must ensure request from this unit
+    // is never rejected for more than 1 cycle
     // AGU
     wire [63:0] agu_addr;
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
-    
-    wire lsp_stalled_memory_resp = (m_wb_req_valid && !dm_resp_valid) && !rst;
-    wire lsp_stalled_back_pressure = (!lsp_wb_ready) && !rst;
-    wire lsp_stalled = lsp_stalled_memory_resp || lsp_stalled_back_pressure;
-    reg lsp_stalled_last;
-    assign ix_lsp_ready = (!lsp_stalled && !lsp_stalled_last && !(lsp_memreq_last && !dm_req_ready));
-    wire lsp_memreq_nack = dm_req_valid && !dm_req_ready;
-    reg lsp_memreq_last;
 
     reg ag_m_valid;
     reg [63:0] ag_m_pc;
@@ -121,14 +117,20 @@ module lsp(
             (ix_lsp_mem_width == `MW_WORD) ? mem_wmask_word :
             8'hff;
 
-    // AG stage
     always @(posedge clk) begin
+        // Memory stage
+        if ((lsp_wb_valid && lsp_wb_ready) || (!lsp_wb_valid)) begin
+            lsp_wb_result <= m_wb_result;
+            lsp_wb_pc <= ag_m_pc;
+            lsp_wb_dst <= ag_m_dst;
+            lsp_wb_wb_en <= ag_m_wb_en;
+            lsp_wb_valid <= dm_resp_valid;
+        end
+        if (dm_resp_valid && dm_resp_valid)
+            lsp_ix_mem_busy <= 1'b0;
+
+        // AG stage
         if (handshaking) begin
-            dm_req_addr <= agu_addr;
-            dm_req_wdata <= mem_wdata;
-            dm_req_wmask <= mem_wmask;
-            dm_req_wen <= !ix_lsp_wb_en;
-            ag_m_valid <= !ag_abort && !ualign; // Cancel unaligned access
             ag_m_pc <= ix_lsp_pc;
             ag_m_dst <= ix_lsp_dst;
             ag_m_wb_en <= ix_lsp_wb_en;
@@ -137,60 +139,37 @@ module lsp(
             ag_m_mem_width <= ix_lsp_mem_width;
             lsp_unaligned_load <= !ag_abort && ualign && !ix_lsp_wb_en;
             lsp_unaligned_store <= !ag_abort && ualign && ix_lsp_wb_en;
+            lsp_ix_mem_busy <= !ag_abort && !ualign;
         end
         else begin
-            if (!lsp_stalled) begin
-                ag_m_valid <= 1'b0;
-            end
             lsp_unaligned_load <= 1'b0;
             lsp_unaligned_store <= 1'b0;
         end
-        lsp_stalled_last <= lsp_stalled;
-        lsp_memreq_last <= dm_req_valid;
 
         if (rst) begin
-            lsp_stalled_last <= 1'b0;
-            ag_m_valid <= 1'b0;
             lsp_unaligned_load <= 1'b0;
             lsp_unaligned_store <= 1'b0;
+            lsp_wb_valid <= 1'b0;
         end
     end
 
     assign lsp_unaligned_epc = ag_m_pc;
 
-    // For hazard detection
-    assign lsp_ix_mem_busy = dm_req_valid || lsp_stalled;
-    assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
-    assign lsp_ix_mem_dst = ag_m_dst;
+    // Same stage...
+    assign dm_req_addr = agu_addr;
+    assign dm_req_wdata = mem_wdata;
+    assign dm_req_wmask = mem_wmask;
+    assign dm_req_wen = !ix_lsp_wb_en;
+    wire [1:0] m_wb_mem_width = ag_m_mem_width;;
+
+    assign dm_req_valid = ix_lsp_valid && !rst && !ag_abort && !ualign;
+    assign ix_lsp_ready = dm_req_ready || ag_abort || ualign;
 
     // Memory stage
-    reg m_wb_req_valid;
-    reg [63:0] m_wb_pc;
-    reg [4:0] m_wb_dst;
-    reg m_wb_wb_en;
-    reg [2:0] m_wb_byte_offset;
-    reg m_wb_mem_sign;
-    reg [1:0] m_wb_mem_width;
-    always @(posedge clk) begin
-        if (!lsp_stalled_memory_resp) begin
-            m_wb_req_valid <= dm_req_valid && dm_req_ready;
-        end
-        if (!lsp_stalled) begin
-            m_wb_pc <= ag_m_pc;
-            m_wb_dst <= ag_m_dst;
-            m_wb_wb_en <= ag_m_wb_en;
-            m_wb_byte_offset <= ag_m_byte_offset;
-            m_wb_mem_sign <= ag_m_mem_sign;
-            m_wb_mem_width <= ag_m_mem_width;
-        end
-    end
-
-    assign dm_req_valid = ag_m_valid && !lsp_stalled;
-
     wire [63:0] mem_rd = dm_resp_rdata;
 
-    wire [1:0] m_wb_half_offset = m_wb_byte_offset[2:1];
-    wire m_wb_word_offset = m_wb_byte_offset[2];
+    wire [1:0] ag_m_half_offset = ag_m_byte_offset[2:1];
+    wire ag_m_word_offset = ag_m_byte_offset[2];
 
     wire [7:0] mem_rd_bl [0:7];
     wire [15:0] mem_rd_hl [0:3];
@@ -208,9 +187,9 @@ module lsp(
     endgenerate
 
 
-    wire [7:0] mem_rd_b = mem_rd_bl[m_wb_byte_offset];
-    wire [15:0] mem_rd_h = mem_rd_hl[m_wb_half_offset];
-    wire [31:0] mem_rd_w = mem_rd_wl[m_wb_word_offset];
+    wire [7:0] mem_rd_b = mem_rd_bl[ag_m_byte_offset];
+    wire [15:0] mem_rd_h = mem_rd_hl[ag_m_half_offset];
+    wire [31:0] mem_rd_w = mem_rd_wl[ag_m_word_offset];
 
     wire [63:0] mem_rd_bu = {56'b0, mem_rd_b};
     wire [63:0] mem_rd_bs = {{56{mem_rd_b[7]}}, mem_rd_b};
@@ -220,22 +199,15 @@ module lsp(
     wire [63:0] mem_rd_ws = {{32{mem_rd_w[31]}}, mem_rd_w};
 
     wire [63:0] m_wb_result = 
-        (m_wb_mem_width == `MW_BYTE) ? (m_wb_mem_sign ? mem_rd_bu : mem_rd_bs) :
-        (m_wb_mem_width == `MW_HALF) ? (m_wb_mem_sign ? mem_rd_hu : mem_rd_hs) :
-        (m_wb_mem_width == `MW_WORD) ? (m_wb_mem_sign ? mem_rd_wu : mem_rd_ws) :
+        (m_wb_mem_width == `MW_BYTE) ? (ag_m_mem_sign ? mem_rd_bu : mem_rd_bs) :
+        (m_wb_mem_width == `MW_HALF) ? (ag_m_mem_sign ? mem_rd_hu : mem_rd_hs) :
+        (m_wb_mem_width == `MW_WORD) ? (ag_m_mem_sign ? mem_rd_wu : mem_rd_ws) :
         (mem_rd);
-    
-    fifo_2d_fwft #(.WIDTH(134)) lsp_fifo (
-        .clk(clk),
-        .rst(rst),
-        .a_data({m_wb_result, m_wb_pc, m_wb_dst, m_wb_wb_en}),
-        .a_valid(dm_resp_valid),
-        /* verilator lint_off PINCONNECTEMPTY */
-        .a_ready(),
-        /* verilator lint_on PINCONNECTEMPTY */
-        .b_data({lsp_wb_result, lsp_wb_pc, lsp_wb_dst, lsp_wb_wb_en}),
-        .b_valid(lsp_wb_valid),
-        .b_ready(lsp_wb_ready)
-    );
+
+    // For hazard detection or forwarding (if forwarding is enabled)
+    assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
+    assign lsp_ix_mem_dst = ag_m_dst;
+    assign lsp_ix_mem_result = m_wb_result;
+    assign lsp_ix_mem_result_valid = dm_resp_valid;
 
 endmodule

@@ -93,14 +93,14 @@ module wb(
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
-    // Current priority: md > buf > lsp > ip > trap. Though trap shouldn't have
-    // collision with other types. The buf should probably be prioritized more
-    // To ensure data flowing.
-    wire md_wb_ac = md_wb_req && !ip_wb_hipri;
-    wire buf_wb_ac = (!md_wb_ac && !ip_wb_hipri) && wb_buf_valid;
-    wire lsp_wb_ac = (!md_wb_ac && !buf_wb_ac && !ip_wb_hipri) && lsp_wb_req;
-    wire ip_wb_ac = (!md_wb_ac && !buf_wb_ac && !lsp_wb_ac) && ip_wb_req;
-    wire trap_wb_ac = (!md_wb_ac && !buf_wb_ac && !lsp_wb_ac && !ip_wb_ac) && trap_wb_req;
+    // Current priority: buf > lsp > md > ip > trap.
+    // Though trap shouldn't have collision with other types.
+    // The buf should is prioritized to ensure data flowing.
+    wire buf_wb_ac = (!ip_wb_hipri) && wb_buf_valid;
+    wire lsp_wb_ac = (!buf_wb_ac && !ip_wb_hipri) && lsp_wb_req;
+    wire md_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !ip_wb_hipri) && md_wb_req;
+    wire ip_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !md_wb_ac) && ip_wb_req;
+    wire trap_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !md_wb_ac && !ip_wb_ac) && trap_wb_req;
 
     // Allow write to buffer either its empty or the value will be used this
     // cycle

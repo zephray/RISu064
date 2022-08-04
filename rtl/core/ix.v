@@ -112,6 +112,8 @@ module ix(
     input  wire         lsp_ix_mem_busy,
     input  wire         lsp_ix_mem_wb_en,
     input  wire [4:0]   lsp_ix_mem_dst,
+    input  wire [63:0]  lsp_ix_mem_result,
+    input  wire [4:0]   lsp_ix_mem_result_valid,
     input  wire [4:0]   lsp_wb_dst,
     input  wire [63:0]  lsp_wb_result,
     input  wire         lsp_wb_wb_en,
@@ -236,6 +238,14 @@ module ix(
                     rs_ready[i] = 1'b0;
                     dbg_stl_lma[i] = 1'b1;
                 end
+                // Forwarding point: LSP readout
+                `ifdef ENABLE_MEM_FORWARING
+                if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == rf_rsrc[i]) &&
+                        lsp_ix_mem_result_valid) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = lsp_ix_mem_result;
+                end
+                `endif
                 // Stall point: LSP address generation
                 if (lsp_ag_active && ix_lsp_wb_en &&
                         (ix_lsp_dst == rf_rsrc[i])) begin
@@ -280,7 +290,7 @@ module ix(
     wire waw_from_md = (!ix_md_valid || (ix_md_dst != dec_ix_rd)) &&
             (!md_ix_active || (md_ix_dst != dec_ix_rd));
     // For LSP: It's only going to be faster than MD, only check md
-    wire waw_lsp = waw_from_md;
+    wire waw_lsp = waw_from_ip && waw_from_md;
     // For IP: It need to protect against LSP and MD
     wire waw_ip = waw_from_lsp && waw_from_md;
     // For MD: It need to protect against only LSP

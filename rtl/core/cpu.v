@@ -261,6 +261,8 @@ module cpu(
     wire        lsp_ix_mem_busy;
     wire        lsp_ix_mem_wb_en;
     wire [4:0]  lsp_ix_mem_dst;
+    wire        lsp_ix_mem_result_valid;
+    wire [63:0] lsp_ix_mem_result;
     wire [4:0]  lsp_wb_dst;
     wire [63:0] lsp_wb_result;
     wire [63:0] lsp_wb_pc;
@@ -380,6 +382,8 @@ module cpu(
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
+        .lsp_ix_mem_result(lsp_ix_mem_result),
+        .lsp_ix_mem_result_valid(lsp_ix_mem_result_valid),
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),
         .lsp_wb_wb_en(lsp_wb_wb_en),
@@ -494,6 +498,8 @@ module cpu(
         .lsp_ix_mem_busy(lsp_ix_mem_busy),
         .lsp_ix_mem_wb_en(lsp_ix_mem_wb_en),
         .lsp_ix_mem_dst(lsp_ix_mem_dst),
+        .lsp_ix_mem_result(lsp_ix_mem_result),
+        .lsp_ix_mem_result_valid(lsp_ix_mem_result_valid),
         // To writeback
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),

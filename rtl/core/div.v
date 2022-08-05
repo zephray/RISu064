@@ -135,6 +135,10 @@ module div(
             resp_result <= (op_word_reg) ?
                     {{32{result_64[31]}}, result_64[31:0]} : result_64;
         end
+        default: begin
+            $display("ERROR: Divider entered invalid state");
+            state <= ST_IDLE;
+        end
         endcase
 
         if (rst) begin

@@ -76,7 +76,6 @@ module lsp(
     wire [63:0] agu_addr;
     assign agu_addr = ix_lsp_base + {{52{ix_lsp_offset[11]}}, ix_lsp_offset};
 
-    reg ag_m_valid;
     reg [63:0] ag_m_pc;
     reg [4:0] ag_m_dst;
     reg ag_m_wb_en;

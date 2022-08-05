@@ -36,17 +36,22 @@ module ip(
     input  wire [3:0]   ix_ip_op,
     input  wire         ix_ip_option,
     input  wire         ix_ip_truncate,
+    // Disable linting in case branching support is disabled
+    /* verilator lint_off UNUSED */
     input  wire [1:0]   ix_ip_br_type,
     input  wire         ix_ip_br_neg,
     input  wire [63:0]  ix_ip_br_base,
     input  wire [20:0]  ix_ip_br_offset,
     input  wire         ix_ip_br_is_call,
     input  wire         ix_ip_br_is_ret,
+    /* verilator lint_on UNUSED */
     input  wire [63:0]  ix_ip_operand1,
     input  wire [63:0]  ix_ip_operand2,
+    /* verilator lint_off UNUSED */
     input  wire         ix_ip_bp,
     input  wire [1:0]   ix_ip_bp_track,
     input  wire [63:0]  ix_ip_bt,
+    /* verilator lint_on UNUSED */
     input  wire         ix_ip_valid,
     output wire         ix_ip_ready,
     // Forwarding path back to issue
@@ -60,6 +65,7 @@ module ip(
     output reg          ip_wb_valid,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
+    /* verilator lint_off UNDRIVEN */
     output reg          ip_if_branch,
     output reg          ip_if_branch_taken,
     output reg  [63:0]  ip_if_branch_pc,
@@ -68,6 +74,7 @@ module ip(
     output reg  [1:0]   ip_if_branch_track,
     output reg          ip_if_pc_override,
     output reg  [63:0]  ip_if_new_pc
+    /* verilator lint_on UNDRIVEN */
 );
     parameter IP_HANDLE_BRANCH = 1;
 
@@ -132,6 +139,10 @@ module ip(
                 end
             end
         end
+    end
+    else begin
+        assign ip_wb_hipri = 1'b0;
+        // Leave other registers undriven
     end
     endgenerate
 

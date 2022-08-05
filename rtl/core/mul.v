@@ -120,6 +120,10 @@ module mul(
             resp_valid <= 1'b1;
             state <= ST_IDLE;
         end
+        default: begin
+            $display("ERROR: Multiplier entered invalid state");
+            state <= ST_IDLE;
+        end
         endcase
 
         if (rst) begin

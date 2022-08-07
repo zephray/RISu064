@@ -177,7 +177,7 @@ void tick() {
     core->eval();
 
     if (enable_stat) {
-        if (SIGNAL(dec_ix_valid) == 1) {
+        /*if (SIGNAL(dec_ix_valid) == 1) {
             // Could issue, did it issue?
             if (SIGNAL(ix__DOT__dbg_stl_ipe)[0] || SIGNAL(ix__DOT__dbg_stl_ipe[1]))
                 stall_ipe++;
@@ -195,9 +195,9 @@ void tick() {
 
         if (SIGNAL(dec_ix_ready) == 0) {
             total_stall++;
-        }
+        }*/
 
-        if (SIGNAL(ip_if_branch) && SIGNAL(ip_wb_ready)) {
+        if (SIGNAL(ip_if_branch) && SIGNAL(ip0_wb_ready)) {
             branch_count++;
             if (SIGNAL(ip_if_branch_taken)) {
                 taken_count++;
@@ -395,13 +395,13 @@ int main(int argc, char *argv[]) {
 
         uint64_t instret = SIGNAL(trap__DOT__minstret);
         uint64_t cycle = SIGNAL(trap__DOT__mcycle);
-        printf("Retired %lu instructions in %lu cycles. Average CPI: %.1f\n",
+        printf("Retired %lu instructions in %lu cycles. Average IPC: %.1f\n",
                 instret, cycle, (float)instret / (float)cycle);
-
+        
         uint64_t predicted = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_bp_correct);
         uint64_t btb_miss_on_predict = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_btb_miss);
 
-        printf("Total stall/ bubbles: %lu\n", cycle - instret);
+        /*printf("Total stall/ bubbles: %lu\n", cycle - instret);
         printf("Stall frontend stall: %lu\n", if_nr_count);
         printf("Total backend stall: %lu\n", total_stall);
         printf("Bubbles due to branching: %lu\n", mispredict_count * 2);
@@ -413,12 +413,12 @@ int main(int argc, char *argv[]) {
         printf("Stall due to WAW on integer EU: %lu\n", SIGNAL(ix__DOT__dbg_stl_ip0waw_cntr));
         printf("Stall due to WAW on load store: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
         printf("Stall due to WAW on multiply: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
-        printf("Stall due to branching: %lu\n", mispredict_count * 4);
+        printf("Stall due to branching: %lu\n", mispredict_count * 4);*/
         printf("Total branches: %lu\n", branch_count);
         if (branch_count != 0) {
             printf("Taken branches: %lu (%ld%%)\n", taken_count, taken_count * 100 / branch_count);
             printf("Branch predictor correct: %lu (%ld%%)\n", predicted, predicted * 100 / branch_count);
-            printf("BHT miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
+            printf("BTB miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
             printf("Combined mistaken branches: %lu (Correct %ld%%)\n", mispredict_count,
                     100 - mispredict_count * 100 / branch_count);
         }

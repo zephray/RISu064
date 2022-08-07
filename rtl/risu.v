@@ -22,7 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-
+`include "options.vh"
 
 module risu(
     input  wire         clk,
@@ -48,9 +48,6 @@ module risu(
     input  wire         extint_timer,
     input  wire         extint_external
 );
-
-    parameter USE_L1_CACHE = 1'b0;
-
     // Signals from CPU
     wire [31:0] im_req_addr;
     wire        im_req_valid;
@@ -104,79 +101,76 @@ module risu(
         .extint_external(extint_external)
     );
 
-    generate
-    if (USE_L1_CACHE) begin: l1_cache
-        // TODO: Support flushing and invalidating
-        l1cache l1i(
-            .clk(clk),
-            .rst(rst),
-            .core_req_addr(im_req_addr),
-            .core_req_wen(1'b0),
-            .core_req_wdata(64'bx),
-            .core_req_wmask(8'bx),
-            .core_req_ready(im_req_ready),
-            .core_req_valid(im_req_valid),
-            .core_resp_rdata(im_resp_rdata),
-            .core_resp_valid(im_resp_valid),
-            .mem_req_addr(ib_req_addr),
-            /* verilator lint_off PINCONNECTEMPTY */
-            .mem_req_wen(),
-            .mem_req_wdata(),
-            .mem_req_wmask(),
-            /* verilator lint_on PINCONNECTEMPTY */
-            .mem_req_size(ib_req_size),
-            .mem_req_valid(ib_req_valid),
-            .mem_req_ready(ib_req_ready),
-            .mem_resp_rdata(ib_resp_rdata),
-            .mem_resp_valid(ib_resp_valid),
-            .mem_resp_ready(ib_resp_ready)
-        );
+    `ifdef USE_L1_CACHE
+    // TODO: Support flushing and invalidating
+    l1cache l1i(
+        .clk(clk),
+        .rst(rst),
+        .core_req_addr(im_req_addr),
+        .core_req_wen(1'b0),
+        .core_req_wdata(64'bx),
+        .core_req_wmask(8'bx),
+        .core_req_ready(im_req_ready),
+        .core_req_valid(im_req_valid),
+        .core_resp_rdata(im_resp_rdata),
+        .core_resp_valid(im_resp_valid),
+        .mem_req_addr(ib_req_addr),
+        /* verilator lint_off PINCONNECTEMPTY */
+        .mem_req_wen(),
+        .mem_req_wdata(),
+        .mem_req_wmask(),
+        /* verilator lint_on PINCONNECTEMPTY */
+        .mem_req_size(ib_req_size),
+        .mem_req_valid(ib_req_valid),
+        .mem_req_ready(ib_req_ready),
+        .mem_resp_rdata(ib_resp_rdata),
+        .mem_resp_valid(ib_resp_valid),
+        .mem_resp_ready(ib_resp_ready)
+    );
 
-        l1cache l1d(
-            .clk(clk),
-            .rst(rst),
-            .core_req_addr(dm_req_addr),
-            .core_req_wen(dm_req_wen),
-            .core_req_wdata(dm_req_wdata),
-            .core_req_wmask(dm_req_wmask),
-            .core_req_ready(dm_req_ready),
-            .core_req_valid(dm_req_valid),
-            .core_resp_rdata(dm_resp_rdata),
-            .core_resp_valid(dm_resp_valid),
-            .mem_req_addr(db_req_addr),
-            .mem_req_wen(db_req_wen),
-            .mem_req_wdata(db_req_wdata),
-            .mem_req_wmask(db_req_wmask),
-            .mem_req_size(db_req_size),
-            .mem_req_valid(db_req_valid),
-            .mem_req_ready(db_req_ready),
-            .mem_resp_rdata(db_resp_rdata),
-            .mem_resp_valid(db_resp_valid),
-            .mem_resp_ready(db_resp_ready)
-        );
-    end
-    else begin: no_cache
-        assign ib_req_addr = im_req_addr;
-        assign ib_req_size = 3'd3; // Fixed 64-bit transfer
-        assign ib_req_valid = im_req_valid;
-        assign im_req_ready = ib_req_ready;
-        assign ib_resp_ready = 1'b1;
-        assign im_resp_rdata = ib_resp_rdata;
-        assign im_resp_valid = ib_resp_valid;
-        assign db_req_addr = dm_req_addr;
-        assign db_req_wdata = dm_req_wdata;
-        assign db_req_wmask = dm_req_wmask;
-        assign db_req_wen = dm_req_wen;
-        assign db_req_size = 3'd3;
-        assign db_req_valid = dm_req_valid;
-        assign dm_req_ready = db_req_ready;
-        assign db_resp_ready = 1'b1;
-        assign dm_resp_rdata = db_resp_rdata;
-        assign dm_resp_valid = db_resp_valid;
-        // Tie-off invalidate request: there is no icache to begin with
-        assign im_invalidate_resp = im_invalidate_req;
-        assign dm_flush_resp = dm_flush_req;
-    end
-    endgenerate
+    l1cache l1d(
+        .clk(clk),
+        .rst(rst),
+        .core_req_addr(dm_req_addr),
+        .core_req_wen(dm_req_wen),
+        .core_req_wdata(dm_req_wdata),
+        .core_req_wmask(dm_req_wmask),
+        .core_req_ready(dm_req_ready),
+        .core_req_valid(dm_req_valid),
+        .core_resp_rdata(dm_resp_rdata),
+        .core_resp_valid(dm_resp_valid),
+        .mem_req_addr(db_req_addr),
+        .mem_req_wen(db_req_wen),
+        .mem_req_wdata(db_req_wdata),
+        .mem_req_wmask(db_req_wmask),
+        .mem_req_size(db_req_size),
+        .mem_req_valid(db_req_valid),
+        .mem_req_ready(db_req_ready),
+        .mem_resp_rdata(db_resp_rdata),
+        .mem_resp_valid(db_resp_valid),
+        .mem_resp_ready(db_resp_ready)
+    );
+    `else
+    assign ib_req_addr = im_req_addr;
+    assign ib_req_size = 3'd3; // Fixed 64-bit transfer
+    assign ib_req_valid = im_req_valid;
+    assign im_req_ready = ib_req_ready;
+    assign ib_resp_ready = 1'b1;
+    assign im_resp_rdata = ib_resp_rdata;
+    assign im_resp_valid = ib_resp_valid;
+    assign db_req_addr = dm_req_addr;
+    assign db_req_wdata = dm_req_wdata;
+    assign db_req_wmask = dm_req_wmask;
+    assign db_req_wen = dm_req_wen;
+    assign db_req_size = 3'd3;
+    assign db_req_valid = dm_req_valid;
+    assign dm_req_ready = db_req_ready;
+    assign db_resp_ready = 1'b1;
+    assign dm_resp_rdata = db_resp_rdata;
+    assign dm_resp_valid = db_resp_valid;
+    // Tie-off invalidate request: there is no icache to begin with
+    assign im_invalidate_resp = im_invalidate_req;
+    assign dm_flush_resp = dm_flush_req;
+    `endif
 
 endmodule

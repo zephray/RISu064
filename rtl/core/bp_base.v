@@ -23,39 +23,64 @@
 // SOFTWARE.
 //
 module bp_base(
-    input  wire                     clk,
-    input  wire                     rst,
-    input  wire                     bp_active,
-    input  wire                     bp_update,
-    input  wire                     bp_update_taken, // Taken - Inc, NT - Dec
-    input  wire                     bp_init_active,
-    input  wire [`BHT_ABITS-1:0]    bp_init_index,
-    input  wire [`BHT_ABITS-1:0]    bp_index,
-    input  wire [`BHT_ABITS-1:0]    bp_update_index,
-    output wire [1:0]               bp_counter
+    input  wire                         clk,
+    input  wire                         rst,
+    input  wire                         bp_active,
+    input  wire                         bp_update,
+    input  wire                         bp_update_taken, // Taken - Inc, NT - Dec
+    input  wire                         bp_init_active,
+    input  wire [`BHT_MEM_ABITS-1:0]    bp_init_index,
+    input  wire [`BHT_ABITS-1:0]        bp_index,
+    input  wire [`BHT_ABITS-1:0]        bp_update_index,
+    output wire [1:0]                   bp_counter_lo,
+    output wire [1:0]                   bp_counter_hi
 );
 
-    wire [`BHT_ABITS-1:0] bp_wr_index;
-    wire [1:0] bp_wr_data;
+    wire [`BHT_MEM_ABITS-1:0] bp_wr_index;
+    wire [7:0] bp_mem_wr_data;
     wire bp_wr_en;
+    wire [7:0] bp_mem_rd_data;
     wire [1:0] bp_update_counter;
+    wire [7:0] bp_counter;
+    wire [3:0] bp_counter_hilo;
+    reg bp_hilo;
     wire bp_update_ren;
-    /*ram_4096_2 bpu_ram(*/
-    ram_customize #(.DBITS(2), .ABITS(`BHT_ABITS)) bpu_ram(
+    /*ram_1024_8 bpu_ram(*/
+    ram_customize #(.DBITS(8), .ABITS(`BHT_MEM_ABITS)) bpu_ram(
         .clk(clk),
         .rst(rst),
         .addr0(bp_wr_index),
         .re0(bp_update_ren),
-        .rd0(bp_update_counter),
-        .wr0(bp_wr_data),
+        .rd0(bp_mem_rd_data),
+        .wr0(bp_mem_wr_data),
         .we0(bp_wr_en),
-        .addr1(bp_index),
+        .addr1(bp_index[`BHT_ABITS-1:2]),
         .re1(bp_active),
         .rd1(bp_counter)
     );
+    always @(posedge clk) begin
+        if (bp_active)
+            bp_hilo <= bp_index[1];
+    end
 
-    assign bp_wr_index = (bp_init_active) ? (bp_init_index) : (bp_update_fifo_index);
-    wire [1:0] bp_wr_data = (bp_init_active) ? (2'd1) : (bp_update_data);
+    assign bp_counter_hilo = (bp_hilo) ? bp_counter[7:4] : bp_counter[3:0];
+    assign bp_counter_hi = bp_counter_hilo[3:2];
+    assign bp_counter_lo = bp_counter_hilo[1:0];
+    wire [1:0] bp_sel = bp_update_fifo_index[1:0];
+    assign bp_update_counter =
+            (bp_sel == 2'd0) ? bp_mem_rd_data[1:0] :
+            (bp_sel == 2'd1) ? bp_mem_rd_data[3:2] :
+            (bp_sel == 2'd2) ? bp_mem_rd_data[5:4] :
+            (bp_sel == 2'd3) ? bp_mem_rd_data[7:6] : 2'bx;
+    wire [7:0] bp_wr_data =
+            (bp_sel == 2'd0) ? {bp_mem_rd_data[7:2], bp_update_data} :
+            (bp_sel == 2'd1) ? {bp_mem_rd_data[7:4], bp_update_data, bp_mem_rd_data[1:0]} :
+            (bp_sel == 2'd2) ? {bp_mem_rd_data[7:6], bp_update_data, bp_mem_rd_data[3:0]} :
+            (bp_sel == 2'd3) ? {bp_update_data, bp_mem_rd_data[5:0]} : 8'bx;
+
+    assign bp_wr_index = (bp_init_active) ? (bp_init_index) :
+            (bp_update_fifo_index[`BHT_ABITS-1:2]);
+    assign bp_mem_wr_data = (bp_init_active) ? (8'b01010101) : (bp_wr_data);
     wire bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
 
     reg bp_update_fifo_ready;
@@ -63,22 +88,29 @@ module bp_base(
     wire [`BHT_ABITS-1:0] bp_update_fifo_index;
     wire bp_update_fifo_taken;
     wire bp_update_fifo_input_ready;
+    /* verilator lint_off PINMISSING */
     fifo_nd #(.WIDTH(`BHT_ABITS+1), .ABITS(2)) bp_update_fifo (
         .clk(clk),
         .rst(rst),
         .a_data({bp_update_index, bp_update_taken}),
         .a_valid(bp_update),
         .a_ready(bp_update_fifo_input_ready),
-        .a_almost_full(),
         .b_data({bp_update_fifo_index, bp_update_fifo_taken}),
         .b_valid(bp_update_fifo_valid),
         .b_ready(bp_update_fifo_ready)
     );
+    /* verilator lint_on PINMISSING */
 
     // Happnes, but rare. Shouldn't affect performance much
     /*always @(posedge clk) begin
         if (!bp_update_fifo_input_ready && ip_if_branch) begin
             $display("BP update queue overflow");
+        end
+    end*/
+
+    /*always @(posedge clk) begin
+        if (bp_update_en) begin
+            $display("BP Index %03x update to %d", bp_update_fifo_index, bp_update_data);
         end
     end*/
 

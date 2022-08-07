@@ -73,8 +73,10 @@ module ip(
     output reg          ip_if_branch_is_ret,
     output reg  [1:0]   ip_if_branch_track,
     output reg          ip_if_pc_override,
-    output reg  [63:0]  ip_if_new_pc
+    output reg  [63:0]  ip_if_new_pc,
     /* verilator lint_on UNDRIVEN */
+    // Pipeline flush
+    input  wire         ip_abort
 );
     parameter IP_HANDLE_BRANCH = 1;
 
@@ -164,7 +166,7 @@ module ip(
 
     always @(posedge clk) begin
         if (ix_ip_ready) begin
-            ip_wb_valid <= ix_ip_valid && !ip_if_pc_override;
+            ip_wb_valid <= ix_ip_valid && !ip_if_pc_override && !ip_abort;
         end
         else if (ip_wb_ready && ip_wb_valid) begin
             ip_wb_valid <= 1'b0;

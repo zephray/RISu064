@@ -33,67 +33,61 @@ module ix(
     input  wire [63:0]  rf_rdata0,
     output wire [4:0]   rf_rsrc1,
     input  wire [63:0]  rf_rdata1,
+    output wire [4:0]   rf_rsrc2,
+    input  wire [63:0]  rf_rdata2,
+    output wire [4:0]   rf_rsrc3,
+    input  wire [63:0]  rf_rdata3,
     // IX interface
-    input  wire [63:0]  dec_ix_pc,
-    input  wire         dec_ix_bp,
-    input  wire [1:0]   dec_ix_bp_track,
-    input  wire [63:0]  dec_ix_bt,
-    input  wire [3:0]   dec_ix_op,
-    input  wire         dec_ix_option,
-    input  wire         dec_ix_truncate,
-    input  wire [1:0]   dec_ix_br_type,
-    input  wire         dec_ix_br_neg,
-    input  wire         dec_ix_br_base_src,
-    input  wire         dec_ix_br_inj_pc,
-    input  wire         dec_ix_br_is_call,
-    input  wire         dec_ix_br_is_ret,
-    input  wire         dec_ix_mem_sign,
-    input  wire [1:0]   dec_ix_mem_width,
-    input  wire [1:0]   dec_ix_csr_op,
-    input  wire         dec_ix_mret,
-    input  wire         dec_ix_intr,
-    input  wire [3:0]   dec_ix_cause,
-    input  wire [2:0]   dec_ix_md_op,
-    input  wire         dec_ix_muldiv,
-    input  wire [2:0]   dec_ix_op_type,
-    input  wire [1:0]   dec_ix_operand1,
-    input  wire [1:0]   dec_ix_operand2,
-    input  wire [63:0]  dec_ix_imm,
-    input  wire         dec_ix_legal,
-    input  wire         dec_ix_wb_en,
-    input  wire [4:0]   dec_ix_rs1,
-    input  wire [4:0]   dec_ix_rs2,
-    input  wire [4:0]   dec_ix_rd,
-    input  wire         dec_ix_fencei,
-    input  wire         dec_ix_valid,
-    output wire         dec_ix_ready,
+    input  wire [247:0] dec0_ix_bundle,
+    input  wire         dec0_ix_valid,
+    output wire         dec0_ix_ready,
+    input  wire [247:0] dec1_ix_bundle,
+    input  wire         dec1_ix_valid,
+    output wire         dec1_ix_ready,
     // FU interfaces
-    // To integer pipe
-    output reg  [63:0]  ix_ip_pc,
-    output reg  [4:0]   ix_ip_dst,
-    output reg          ix_ip_wb_en,
-    output reg  [3:0]   ix_ip_op,
-    output reg          ix_ip_option,
-    output reg          ix_ip_truncate,
-    output reg  [1:0]   ix_ip_br_type,
-    output reg          ix_ip_br_neg,
-    output reg  [63:0]  ix_ip_br_base,
-    output reg  [20:0]  ix_ip_br_offset,
-    output reg          ix_ip_br_is_call,
-    output reg          ix_ip_br_is_ret,
-    output reg  [63:0]  ix_ip_operand1,
-    output reg  [63:0]  ix_ip_operand2,
-    output reg          ix_ip_bp,
-    output reg  [1:0]   ix_ip_bp_track,
-    output reg  [63:0]  ix_ip_bt,
-    output reg          ix_ip_valid,
-    input  wire         ix_ip_ready,
+    // To integer pipe 0
+    output reg  [63:0]  ix_ip0_pc,
+    output reg  [4:0]   ix_ip0_dst,
+    output reg          ix_ip0_wb_en,
+    output reg  [3:0]   ix_ip0_op,
+    output reg          ix_ip0_option,
+    output reg          ix_ip0_truncate,
+    output reg  [1:0]   ix_ip0_br_type,
+    output reg          ix_ip0_br_neg,
+    output reg  [63:0]  ix_ip0_br_base,
+    output reg  [20:0]  ix_ip0_br_offset,
+    output reg          ix_ip0_br_is_call,
+    output reg          ix_ip0_br_is_ret,
+    output reg  [63:0]  ix_ip0_operand1,
+    output reg  [63:0]  ix_ip0_operand2,
+    output reg          ix_ip0_bp,
+    output reg  [1:0]   ix_ip0_bp_track,
+    output reg  [63:0]  ix_ip0_bt,
+    output reg          ix_ip0_valid,
+    input  wire         ix_ip0_ready,
     // Hazard detection & Bypassing
-    input  wire [63:0]  ip_ix_forwarding,
-    input  wire [4:0]   ip_wb_dst,
-    input  wire [63:0]  ip_wb_result,
-    input  wire         ip_wb_wb_en,
-    input  wire         ip_wb_valid,
+    input  wire [63:0]  ip0_ix_forwarding,
+    input  wire [4:0]   ip0_wb_dst,
+    input  wire [63:0]  ip0_wb_result,
+    input  wire         ip0_wb_wb_en,
+    input  wire         ip0_wb_valid,
+    // To integer pipe 1
+    output reg  [63:0]  ix_ip1_pc,
+    output reg  [4:0]   ix_ip1_dst,
+    output reg          ix_ip1_wb_en,
+    output reg  [3:0]   ix_ip1_op,
+    output reg          ix_ip1_option,
+    output reg          ix_ip1_truncate,
+    output reg  [63:0]  ix_ip1_operand1,
+    output reg  [63:0]  ix_ip1_operand2,
+    output reg          ix_ip1_valid,
+    input  wire         ix_ip1_ready,
+    // Hazard detection & Bypassing
+    input  wire [63:0]  ip1_ix_forwarding,
+    input  wire [4:0]   ip1_wb_dst,
+    input  wire [63:0]  ip1_wb_result,
+    input  wire         ip1_wb_wb_en,
+    input  wire         ip1_wb_valid,
     // To load/ store pipe
     output reg  [63:0]  ix_lsp_pc,
     output reg  [4:0]   ix_lsp_dst,
@@ -113,7 +107,7 @@ module ix(
     input  wire         lsp_ix_mem_wb_en,
     input  wire [4:0]   lsp_ix_mem_dst,
     input  wire [63:0]  lsp_ix_mem_result,
-    input  wire [4:0]   lsp_ix_mem_result_valid,
+    input  wire         lsp_ix_mem_result_valid,
     input  wire [4:0]   lsp_wb_dst,
     input  wire [63:0]  lsp_wb_result,
     input  wire         lsp_wb_wb_en,
@@ -156,43 +150,179 @@ module ix(
     output reg  [63:0]  ix_if_new_pc
 );
 
+    // Unbundle signals
+    wire [63:0] dec0_ix_pc;
+    wire        dec0_ix_bp;
+    wire [1:0]  dec0_ix_bp_track;
+    wire [63:0] dec0_ix_bt;
+    wire [3:0]  dec0_ix_op;
+    wire        dec0_ix_option;
+    wire        dec0_ix_truncate;
+    wire [1:0]  dec0_ix_br_type;
+    wire        dec0_ix_br_neg;
+    wire        dec0_ix_br_base_src;
+    wire        dec0_ix_br_inj_pc;
+    wire        dec0_ix_br_is_call;
+    wire        dec0_ix_br_is_ret;
+    wire        dec0_ix_mem_sign;
+    wire [1:0]  dec0_ix_mem_width;
+    wire [1:0]  dec0_ix_csr_op;
+    wire        dec0_ix_mret;
+    wire        dec0_ix_intr;
+    wire [3:0]  dec0_ix_cause;
+    wire [2:0]  dec0_ix_md_op;
+    wire        dec0_ix_muldiv;
+    wire [2:0]  dec0_ix_op_type;
+    wire [1:0]  dec0_ix_operand1;
+    wire [1:0]  dec0_ix_operand2;
+    wire [63:0] dec0_ix_imm;
+    wire        dec0_ix_legal;
+    wire        dec0_ix_wb_en;
+    wire [4:0]  dec0_ix_rs1;
+    wire [4:0]  dec0_ix_rs2;
+    wire [4:0]  dec0_ix_rd;
+    wire        dec0_ix_fencei;
+
+    wire [63:0] dec1_ix_pc;
+    wire        dec1_ix_bp;
+    wire [1:0]  dec1_ix_bp_track;
+    wire [63:0] dec1_ix_bt;
+    wire [3:0]  dec1_ix_op;
+    wire        dec1_ix_option;
+    wire        dec1_ix_truncate;
+    wire [1:0]  dec1_ix_br_type;
+    wire        dec1_ix_br_neg;
+    wire        dec1_ix_br_base_src;
+    wire        dec1_ix_br_inj_pc;
+    wire        dec1_ix_br_is_call;
+    wire        dec1_ix_br_is_ret;
+    wire        dec1_ix_mem_sign;
+    wire [1:0]  dec1_ix_mem_width;
+    wire [1:0]  dec1_ix_csr_op;
+    wire        dec1_ix_mret;
+    wire        dec1_ix_intr;
+    wire [3:0]  dec1_ix_cause;
+    wire [2:0]  dec1_ix_md_op;
+    wire        dec1_ix_muldiv;
+    wire [2:0]  dec1_ix_op_type;
+    wire [1:0]  dec1_ix_operand1;
+    wire [1:0]  dec1_ix_operand2;
+    wire [63:0] dec1_ix_imm;
+    wire        dec1_ix_legal;
+    wire        dec1_ix_wb_en;
+    wire [4:0]  dec1_ix_rs1;
+    wire [4:0]  dec1_ix_rs2;
+    wire [4:0]  dec1_ix_rd;
+    wire        dec1_ix_fencei;
+
+    assign {
+        dec0_ix_pc,
+        dec0_ix_bp,
+        dec0_ix_bp_track,
+        dec0_ix_bt,
+        dec0_ix_op,
+        dec0_ix_option,
+        dec0_ix_truncate,
+        dec0_ix_br_type,
+        dec0_ix_br_neg,
+        dec0_ix_br_base_src,
+        dec0_ix_br_inj_pc,
+        dec0_ix_br_is_call,
+        dec0_ix_br_is_ret,
+        dec0_ix_mem_sign,
+        dec0_ix_mem_width,
+        dec0_ix_csr_op,
+        dec0_ix_mret,
+        dec0_ix_intr,
+        dec0_ix_cause,
+        dec0_ix_md_op,
+        dec0_ix_muldiv,
+        dec0_ix_op_type,
+        dec0_ix_operand1,
+        dec0_ix_operand2,
+        dec0_ix_imm,
+        dec0_ix_legal,
+        dec0_ix_wb_en,
+        dec0_ix_rs1,
+        dec0_ix_rs2,
+        dec0_ix_rd,
+        dec0_ix_fencei} = dec0_ix_bundle;
+    
+    assign {
+        dec1_ix_pc,
+        dec1_ix_bp,
+        dec1_ix_bp_track,
+        dec1_ix_bt,
+        dec1_ix_op,
+        dec1_ix_option,
+        dec1_ix_truncate,
+        dec1_ix_br_type,
+        dec1_ix_br_neg,
+        dec1_ix_br_base_src,
+        dec1_ix_br_inj_pc,
+        dec1_ix_br_is_call,
+        dec1_ix_br_is_ret,
+        dec1_ix_mem_sign,
+        dec1_ix_mem_width,
+        dec1_ix_csr_op,
+        dec1_ix_mret,
+        dec1_ix_intr,
+        dec1_ix_cause,
+        dec1_ix_md_op,
+        dec1_ix_muldiv,
+        dec1_ix_op_type,
+        dec1_ix_operand1,
+        dec1_ix_operand2,
+        dec1_ix_imm,
+        dec1_ix_legal,
+        dec1_ix_wb_en,
+        dec1_ix_rs1,
+        dec1_ix_rs2,
+        dec1_ix_rd,
+        dec1_ix_fencei} = dec1_ix_bundle;
+
     // Hazard detection
-    assign rf_rsrc0 = dec_ix_rs1;
-    assign rf_rsrc1 = dec_ix_rs2;
-    wire [4:0] rf_rsrc [0:1];
+    assign rf_rsrc0 = dec0_ix_rs1;
+    assign rf_rsrc1 = dec0_ix_rs2;
+    assign rf_rsrc2 = dec1_ix_rs1;
+    assign rf_rsrc3 = dec1_ix_rs2;
+    wire [4:0] rf_rsrc [0:3];
     assign rf_rsrc[0] = rf_rsrc0;
     assign rf_rsrc[1] = rf_rsrc1;
-    wire [63:0] rf_rdata [0:1];
+    assign rf_rsrc[2] = rf_rsrc2;
+    assign rf_rsrc[3] = rf_rsrc3;
+    wire [63:0] rf_rdata [0:3];
     assign rf_rdata[0] = rf_rdata0;
     assign rf_rdata[1] = rf_rdata1;
-    reg [0:0] rs_ready [0:1];
-    reg [63:0] rs_val [0:1];
-    wire ip_ex_ixstalled = ix_ip_valid && !ix_ip_ready && ix_ip_wb_en;
-    wire ip_ex_active = ix_ip_valid && ix_ip_ready && ix_ip_wb_en;
-    wire ip_wb_active = ip_wb_valid && ip_wb_wb_en;
+    assign rf_rdata[2] = rf_rdata2;
+    assign rf_rdata[3] = rf_rdata3;
+    reg [0:0] rs_ready [0:3];
+    reg [63:0] rs_val [0:3];
+    wire ip0_ex_ixstalled = ix_ip0_valid && !ix_ip0_ready && ix_ip0_wb_en;
+    wire ip0_ex_active = ix_ip0_valid && ix_ip0_ready && ix_ip0_wb_en;
+    wire ip0_wb_active = ip0_wb_valid && ip0_wb_wb_en;
+    wire ip1_ex_ixstalled = ix_ip1_valid && !ix_ip1_ready && ix_ip1_wb_en;
+    wire ip1_ex_active = ix_ip1_valid && ix_ip1_ready && ix_ip1_wb_en;
+    wire ip1_wb_active = ip1_wb_valid && ip1_wb_wb_en;
     wire lsp_ag_active = ix_lsp_valid;
     wire lsp_mem_active = lsp_ix_mem_busy;
     wire lsp_wb_active = lsp_wb_valid && lsp_wb_wb_en;
     /* verilator lint_off UNUSED */
-    reg dbg_stl_ipe [0:1];
-    reg dbg_fwd_ipe [0:1];
-    reg dbg_fwd_ipw [0:1];
-    reg dbg_stl_lag [0:1];
-    reg dbg_stl_lma [0:1];
-    reg dbg_fwd_lwb [0:1];
-    reg dbg_stl_mdi [0:1];
-    reg dbg_stl_mda [0:1];
+    reg dbg_stl_ip0 [0:3];
+    reg dbg_stl_ip1 [0:3];
+    reg dbg_stl_lag [0:3];
+    reg dbg_stl_lma [0:3];
+    reg dbg_stl_mdi [0:3];
+    reg dbg_stl_mda [0:3];
     /* verilator lint_on UNUSED */
     genvar i;
     generate
-        for (i = 0; i < 2; i = i + 1) begin
+        for (i = 0; i < 4; i = i + 1) begin
             always @(*) begin
-                dbg_stl_ipe[i] = 1'b0;
-                dbg_fwd_ipe[i] = 1'b0;
-                dbg_fwd_ipw[i] = 1'b0;
+                dbg_stl_ip0[i] = 1'b0;
+                dbg_stl_ip1[i] = 1'b0;
                 dbg_stl_lag[i] = 1'b0;
                 dbg_stl_lma[i] = 1'b0;
-                dbg_fwd_lwb[i] = 1'b0;
                 dbg_stl_mdi[i] = 1'b0;
                 dbg_stl_mda[i] = 1'b0;
 
@@ -209,29 +339,38 @@ module ix(
                     rs_ready[i] = 1'b1;
                     rs_val[i] = wb_ix_buf_value;
                 end
-                // Forwarding point: IP writeback
-                if (ip_wb_active && (ip_wb_dst == rf_rsrc[i])) begin
+                // Forwarding point: IP0 writeback
+                if (ip0_wb_active && (ip0_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
-                    rs_val[i] = ip_wb_result;
-                    dbg_fwd_ipw[i] = 1'b1;
+                    rs_val[i] = ip0_wb_result;
                 end
-                // Forwarding point: IP execution
-                if (ip_ex_active && (ix_ip_dst == rf_rsrc[i])) begin
+                if (ip1_wb_active && (ip1_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
-                    rs_val[i] = ip_ix_forwarding;
-                    dbg_fwd_ipe[i] = 1'b1;
+                    rs_val[i] = ip1_wb_result;
+                end
+                // Forwarding point: IP1 execution
+                if (ip0_ex_active && (ix_ip0_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = ip0_ix_forwarding;
+                end
+                if (ip1_ex_active && (ix_ip1_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b1;
+                    rs_val[i] = ip1_ix_forwarding;
                 end
                 // Stall point: IP execution not accepted
-                if (ip_ex_ixstalled && (ix_ip_dst == rf_rsrc[i])) begin
+                if (ip0_ex_ixstalled && (ix_ip0_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b0;
-                    dbg_stl_ipe[i] = 1'b1;
+                    dbg_stl_ip0[i] = 1'b1;
+                end
+                if (ip1_ex_ixstalled && (ix_ip1_dst == rf_rsrc[i])) begin
+                    rs_ready[i] = 1'b0;
+                    dbg_stl_ip1[i] = 1'b1;
                 end
 
                 // Forwarding point: LSP writeback
                 if (lsp_wb_active && (lsp_wb_dst == rf_rsrc[i])) begin
                     rs_ready[i] = 1'b1;
                     rs_val[i] = lsp_wb_result;
-                    dbg_fwd_lwb[i] = 1'b1;
                 end
                 // Stall point: LSP memory access active
                 if (lsp_ix_mem_wb_en && (lsp_ix_mem_dst == rf_rsrc[i])) begin
@@ -275,105 +414,206 @@ module ix(
     // WAW hazard
     // TODO: If WB is accepted this cycle OR will be accepted next cycle,
     // then it's not a hazard
-    wire waw_from_ip = (!dec_ix_wb_en) ||
-            ((!ip_wb_active || (ip_wb_dst != dec_ix_rd)) &&
-            (!ip_ex_active || (ix_ip_dst != dec_ix_rd)) &&
-            (!ip_ex_ixstalled || (ix_ip_dst != dec_ix_rd)));
+    wire waw_from_ip0_dec0 = (!dec0_ix_wb_en) ||
+            ((!ip0_wb_active || (ip0_wb_dst != dec0_ix_rd)) &&
+            (!ip0_ex_active || (ix_ip0_dst != dec0_ix_rd)) &&
+            (!ip0_ex_ixstalled || (ix_ip0_dst != dec0_ix_rd)));
+    wire waw_from_ip0_dec1 = (!dec1_ix_wb_en) ||
+            ((!ip0_wb_active || (ip0_wb_dst != dec1_ix_rd)) &&
+            (!ip0_ex_active || (ix_ip0_dst != dec1_ix_rd)) &&
+            (!ip0_ex_ixstalled || (ix_ip0_dst != dec1_ix_rd)));
+    wire waw_from_ip1_dec0 = (!dec0_ix_wb_en) ||
+            ((!ip1_wb_active || (ip1_wb_dst != dec0_ix_rd)) &&
+            (!ip1_ex_active || (ix_ip1_dst != dec0_ix_rd)) &&
+            (!ip1_ex_ixstalled || (ix_ip1_dst != dec0_ix_rd)));
+    wire waw_from_ip1_dec1 = (!dec1_ix_wb_en) ||
+            ((!ip1_wb_active || (ip1_wb_dst != dec1_ix_rd)) &&
+            (!ip1_ex_active || (ix_ip1_dst != dec1_ix_rd)) &&
+            (!ip1_ex_ixstalled || (ix_ip1_dst != dec1_ix_rd)));
+    wire waw_from_ip_dec0 = waw_from_ip0_dec0 && waw_from_ip1_dec0;
+    wire waw_from_ip_dec1 = waw_from_ip0_dec1 && waw_from_ip1_dec1;
     // Warning: this doesn't check the case where LSP is ready for WB.
     // This is creates an edge case where is a load instruction destination is
     // also used for jal target register, and MD happens to be active for two
     // cycles (doesn't currently possible), a WAW condition happens.
     // When this ever becomes possible, WB stage needs provision to fix this.
-    wire waw_from_lsp =
-            (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec_ix_rd)) &&
-            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec_ix_rd));
-    wire waw_from_md = (!ix_md_valid || (ix_md_dst != dec_ix_rd)) &&
-            (!md_ix_active || (md_ix_dst != dec_ix_rd));
+    wire waw_from_lsp_dec0 =
+            (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec0_ix_rd)) &&
+            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec0_ix_rd));
+    wire waw_from_lsp_dec1 =
+            (!lsp_ix_mem_wb_en || (lsp_ix_mem_dst != dec1_ix_rd)) &&
+            (!lsp_ag_active || !ix_lsp_wb_en || (ix_lsp_dst != dec1_ix_rd));
+    wire waw_from_md_dec0 = (!ix_md_valid || (ix_md_dst != dec0_ix_rd)) &&
+            (!md_ix_active || (md_ix_dst != dec0_ix_rd));
+    wire waw_from_md_dec1 = (!ix_md_valid || (ix_md_dst != dec1_ix_rd)) &&
+            (!md_ix_active || (md_ix_dst != dec1_ix_rd));
     // For LSP: It's only going to be faster than MD, only check md
-    wire waw_lsp = waw_from_ip && waw_from_md;
+    wire waw_lsp_dec0 = waw_from_ip_dec0 && waw_from_md_dec0;
+    wire waw_lsp_dec1 = waw_from_ip_dec1 && waw_from_md_dec1;
     // For IP: It need to protect against LSP and MD
-    wire waw_ip = waw_from_lsp && waw_from_md;
+    wire waw_ip_dec0 = waw_from_lsp_dec0 && waw_from_md_dec0;
+    wire waw_ip_dec1 = waw_from_lsp_dec1 && waw_from_md_dec1;
     // For MD: It need to protect against only LSP
-    wire waw_md = waw_from_lsp;
+    wire waw_md_dec0 = waw_from_lsp_dec0;
+    wire waw_md_dec1 = waw_from_lsp_dec1;
 
-    wire operand1_ready = (dec_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
-    wire operand2_ready = (dec_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
+    wire operand1_dec0_ready = (dec0_ix_operand1 == `D_OPR1_RS1) ? rs_ready[0] : 1'b1;
+    wire operand2_dec0_ready = (dec0_ix_operand2 == `D_OPR2_RS2) ? rs_ready[1] : 1'b1;
+    wire operand1_dec1_ready = (dec1_ix_operand1 == `D_OPR1_RS1) ? rs_ready[2] : 1'b1;
+    wire operand2_dec1_ready = (dec1_ix_operand2 == `D_OPR2_RS2) ? rs_ready[3] : 1'b1;
 
-    wire [63:0] operand1_value = ((dec_ix_operand1 == `D_OPR1_PC) ||
-            (dec_ix_br_inj_pc)) ? (dec_ix_pc) :
-            (dec_ix_operand1 == `D_OPR1_RS1) ? (rs_val[0]) :
-            (dec_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) :
-            (dec_ix_operand1 == `D_OPR1_ZIMM) ? ({59'd0, dec_ix_rs1}) : (64'bx);
-    wire [63:0] operand2_value =
-            (dec_ix_operand2 == `D_OPR2_RS2) ? (rs_val[1]) :
-            (dec_ix_operand2 == `D_OPR2_IMM) ? (dec_ix_imm) :
-            (dec_ix_operand2 == `D_OPR2_4) ? (64'd4) : (64'bx);
-    wire [63:0] br_base = (dec_ix_br_base_src == `BB_PC) ? (dec_ix_pc) :
+    wire [63:0] operand1_dec0_value = ((dec0_ix_operand1 == `D_OPR1_PC) ||
+            (dec0_ix_br_inj_pc)) ? (dec0_ix_pc) :
+            (dec0_ix_operand1 == `D_OPR1_RS1) ? (rs_val[0]) :
+            (dec0_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) :
+            (dec0_ix_operand1 == `D_OPR1_ZIMM) ? ({59'd0, dec0_ix_rs1}) : (64'bx);
+    wire [63:0] operand2_dec0_value =
+            (dec0_ix_operand2 == `D_OPR2_RS2) ? (rs_val[1]) :
+            (dec0_ix_operand2 == `D_OPR2_IMM) ? (dec0_ix_imm) :
+            (dec0_ix_operand2 == `D_OPR2_4) ? (64'd4) : (64'bx);
+    wire [63:0] operand1_dec1_value = ((dec1_ix_operand1 == `D_OPR1_PC) ||
+            (dec1_ix_br_inj_pc)) ? (dec1_ix_pc) :
+            (dec1_ix_operand1 == `D_OPR1_RS1) ? (rs_val[2]) :
+            (dec1_ix_operand1 == `D_OPR1_ZERO) ? (64'd0) :
+            (dec1_ix_operand1 == `D_OPR1_ZIMM) ? ({59'd0, dec1_ix_rs1}) : (64'bx);
+    wire [63:0] operand2_dec1_value =
+            (dec1_ix_operand2 == `D_OPR2_RS2) ? (rs_val[3]) :
+            (dec1_ix_operand2 == `D_OPR2_IMM) ? (dec1_ix_imm) :
+            (dec1_ix_operand2 == `D_OPR2_4) ? (64'd4) : (64'bx);
+
+    wire [63:0] br_base_dec0 = (dec0_ix_br_base_src == `BB_PC) ? (dec0_ix_pc) :
+            (rs_val[0]);
+    wire [63:0] br_base_dec1 = (dec1_ix_br_base_src == `BB_PC) ? (dec1_ix_pc) :
             (rs_val[0]);
 
     // Trap instruction also blocks all proceeding instructions
     reg trap_ongoing;
     wire int_pending = (trap_ix_ip != 16'd0);
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
-    wire ix_opr_ready = operand1_ready && operand2_ready;
+    wire ix_dec0_opr_ready = operand1_dec0_ready && operand2_dec0_ready;
+    wire ix_dec1_opr_ready = operand1_dec1_ready && operand2_dec1_ready;
     wire lsp_req_pending = ix_lsp_valid && !ix_lsp_ready;
     wire md_req_pending = ix_md_valid && !ix_md_ready;
-    wire ix_issue_common = (dec_ix_valid) && (ix_opr_ready) && !pipe_flush  &&
-            !trap_ongoing && !int_pending && !exc_pending;
-    wire ix_issue_ip0 = ix_issue_common && (ix_ip_ready) && (waw_ip) &&
-            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH)) &&
-            (!(dec_ix_op_type == `OT_BRANCH) || (!lsp_req_pending && !md_req_pending));
-    wire ix_issue_lsp = ix_issue_common && (ix_lsp_ready) && (waw_lsp) &&
-            ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
-    wire ix_issue_md = ix_issue_common && (ix_md_ready) && (waw_md) &&
-            (dec_ix_op_type == `OT_MULDIV);
-    wire ix_issue_trap = ix_issue_common && !trap_ongoing &&
-            (dec_ix_op_type == `OT_TRAP) && ix_barrier_done; 
-    // Wait for LS pipe to finish
+    wire ix_issue_common = !pipe_flush && !trap_ongoing && !int_pending &&
+            !exc_pending;
+    wire dec0_is_int = (dec0_ix_op_type == `OT_INT);
+    wire dec1_is_int = (dec1_ix_op_type == `OT_INT);
+    wire dec0_is_ls = ((dec0_ix_op_type == `OT_LOAD) || (dec0_ix_op_type == `OT_STORE));
+    wire dec1_is_ls = ((dec1_ix_op_type == `OT_LOAD) || (dec1_ix_op_type == `OT_STORE));
+    wire dec0_is_md = (dec0_ix_op_type == `OT_MULDIV);
+    wire dec1_is_md = (dec1_ix_op_type == `OT_MULDIV);
+    wire dec0_is_branch = (dec0_ix_op_type == `OT_BRANCH);
+    wire dec1_is_branch = (dec1_ix_op_type == `OT_BRANCH);
+    wire dec0_is_trap = (dec0_ix_op_type == `OT_TRAP);
+    wire dec0_is_fence = (dec0_ix_op_type == `OT_FENCE);
+
+    // Inter-dependency check:
+    // 1. Both decoded instructions are valid
+    // 2. They should not write to the same register
+    // 3. INST0 should not write to one of the source of INST1
+    wire ix_interdep_check = dec0_ix_valid && dec1_ix_valid &&
+            ((dec0_ix_rd != dec1_ix_rd) || !(dec0_ix_wb_en && dec1_ix_wb_en)) &&
+            (!dec0_ix_wb_en || (
+                ((dec0_ix_rd != dec1_ix_rs1) || (dec1_ix_operand1 != `D_OPR1_RS1)) &&
+                ((dec0_ix_rd != dec1_ix_rs2) || (dec1_ix_operand2 != `D_OPR2_RS2)))) &&
+            (!dec0_is_branch);
+    // Issue logic
+
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
     reg ix_fencei_done = 1'b0;
-    wire ix_fence_done = (dec_ix_valid) &&
-            (dec_ix_op_type == `OT_FENCE) && (ix_fenced_done) &&
-            (!dec_ix_fencei || ix_fencei_done);
     // Wait for integer pipe to finish
-    wire ix_ibarrier_done = !(ip_ex_ixstalled || ip_ex_active || ip_wb_active);
+    wire ix_ibarrier_done = !(ip0_ex_ixstalled || ip0_ex_active || ip0_wb_active);
     // Barrier for waiting for in-flight instructions to complete
     wire ix_barrier_done = ix_fenced_done && ix_ibarrier_done;
-    wire ix_issue =
-            // Instructions to pipes
-            ix_issue_ip0 || ix_issue_lsp || ix_issue_md || ix_issue_trap ||
-            // Fake instruction for fence/ barrier
-            ix_fence_done;
 
-    wire dbg_stl_ip0waw = ix_issue_common && (ix_ip_ready) && (!waw_ip) &&
-            ((dec_ix_op_type == `OT_INT) || (dec_ix_op_type == `OT_BRANCH));
-    wire dbg_stl_lspwaw = ix_issue_common && (ix_lsp_ready) && (!waw_lsp) &&
-            ((dec_ix_op_type == `OT_LOAD) || (dec_ix_op_type == `OT_STORE));
-    wire dbg_stl_mdwaw = ix_issue_common && (ix_md_ready) && (!waw_md) &&
-            (dec_ix_op_type == `OT_MULDIV);
-    reg [63:0] dbg_stl_ip0waw_cntr;
-    reg [63:0] dbg_stl_lspwaw_cntr;
-    reg [63:0] dbg_stl_mdwaw_cntr;
-    always @(posedge clk) begin
-        if (rst) begin
-            dbg_stl_ip0waw_cntr <= 0;
-            dbg_stl_lspwaw_cntr <= 0;
-            dbg_stl_mdwaw_cntr <= 0;
-        end
-        else begin
-            dbg_stl_ip0waw_cntr <= dbg_stl_ip0waw_cntr + dbg_stl_ip0waw;
-            dbg_stl_lspwaw_cntr <= dbg_stl_lspwaw_cntr + dbg_stl_lspwaw;
-            dbg_stl_mdwaw_cntr <= dbg_stl_mdwaw_cntr + dbg_stl_mdwaw;
+    reg ix_issue_ip0_dec0;
+    //reg ix_issue_ip0_dec1;
+    //reg ix_issue_ip1_dec0;
+    reg ix_issue_ip1_dec1;
+    reg ix_issue_lsp_dec0;
+    reg ix_issue_lsp_dec1;
+    reg ix_issue_md_dec0;
+    reg ix_issue_md_dec1;
+    reg ix_issue_trap;
+    //reg ix_fence_done;
+
+    reg ix_issue_dec0;
+    reg ix_issue_dec1;
+    always @(*) begin
+        ix_issue_ip0_dec0 = 0;
+        //ix_issue_ip0_dec1 = 0;
+        //ix_issue_ip1_dec0 = 0;
+        ix_issue_ip1_dec1 = 0;
+        ix_issue_lsp_dec0 = 0;
+        ix_issue_lsp_dec1 = 0;
+        ix_issue_md_dec0 = 0;
+        ix_issue_md_dec1 = 0;
+        ix_issue_trap = 0;
+        //ix_fence_done = 0;
+        ix_issue_dec0 = 0;
+        ix_issue_dec1 = 0;
+        if (ix_issue_common && dec0_ix_valid && ix_dec0_opr_ready) begin
+            // Trap and fence are not handled here
+            if (dec0_is_int && waw_ip_dec0 && ix_ip0_ready) begin
+                ix_issue_dec0 = 1;
+                ix_issue_ip0_dec0 = 1;
+            end
+            if (dec0_is_branch && waw_ip_dec0 && ix_ip0_ready &&
+                    !lsp_req_pending && !md_req_pending) begin
+                ix_issue_dec0 = 1;
+                ix_issue_ip0_dec0 = 1;
+            end
+            else if (dec0_is_ls && waw_lsp_dec0 && ix_lsp_ready) begin
+                ix_issue_dec0 = 1;
+                ix_issue_lsp_dec0 = 1;
+            end
+            else if (dec0_is_md && waw_md_dec0 && ix_md_ready) begin
+                ix_issue_dec0 = 1;
+                ix_issue_md_dec0 = 1;
+            end
+            else if (dec0_is_trap && !trap_ongoing && ix_barrier_done) begin
+                ix_issue_dec0 = 1;
+                ix_issue_trap = 1;
+            end
+            else if (dec0_is_fence && ix_fenced_done &&
+                    (!dec0_ix_fencei || ix_fencei_done)) begin
+                ix_issue_dec0 = 1;
+                //ix_fence_done = 1;
+            end
+
+            if (ix_issue_dec0 && ix_interdep_check && ix_dec1_opr_ready) begin
+                // Can issue the second one?
+                if (dec1_is_int && waw_ip_dec1 && ix_ip1_ready) begin
+                    ix_issue_dec1 = 1;
+                    ix_issue_ip1_dec1 = 1;
+                end
+                else if (dec1_is_ls && waw_lsp_dec1 && !dec0_is_ls && ix_lsp_ready) begin
+                    ix_issue_dec1 = 1;
+                    ix_issue_lsp_dec1 = 1;
+                end
+                else if (dec1_is_md && waw_md_dec1 && !dec0_is_md && ix_md_ready) begin
+                    ix_issue_dec1 = 1;
+                    ix_issue_md_dec1 = 1;
+                end
+            end
         end
     end
 
-    wire ix_stall = dec_ix_valid && !ix_issue && !pipe_flush;
-    assign dec_ix_ready = !rst && !ix_stall;
+    //wire ix_issue_ip0 = ix_issue_ip0_dec0 || ix_issue_ip0_dec1;
+    wire ix_issue_ip0 = ix_issue_ip0_dec0;
+    //wire ix_issue_ip1 = ix_issue_ip1_dec0 || ix_issue_ip1_dec1;
+    wire ix_issue_ip1 = ix_issue_ip1_dec1;
+    wire ix_issue_lsp = ix_issue_lsp_dec0 || ix_issue_lsp_dec1;
+    wire ix_issue_md = ix_issue_md_dec0 || ix_issue_md_dec1;
+
+    wire ix_stall = dec0_ix_valid && !ix_issue_dec0 && !pipe_flush;
+    assign dec0_ix_ready = !rst && !ix_stall;
+    assign dec1_ix_ready = !rst && !ix_stall && ix_issue_dec1;
 
     // Fencei handling
     reg im_invalidate_done, dm_flush_done;
     always @(posedge clk) begin
-        if ((!rst) && (dec_ix_valid) && (dec_ix_fencei) &&
+        if ((!rst) && (dec0_ix_valid) && (dec0_ix_fencei) &&
                 (!ix_fencei_done)) begin
             im_invalidate_req <= 1'b1;
             dm_flush_req <= 1'b1;
@@ -389,7 +629,7 @@ module ix(
             end
             if (dm_flush_done && im_invalidate_done) begin
                 ix_if_pc_override <= 1'b1;
-                ix_if_new_pc <= dec_ix_pc + 4;
+                ix_if_new_pc <= dec0_ix_pc + 4;
                 ix_fencei_done <= 1'b1;
             end
         end
@@ -402,49 +642,63 @@ module ix(
 
     always @(posedge clk) begin
         if (ix_issue_ip0) begin
-            ix_ip_op <= dec_ix_op;
-            ix_ip_option <= dec_ix_option;
-            ix_ip_truncate <= dec_ix_truncate;
-            ix_ip_br_type <= dec_ix_br_type;
-            ix_ip_br_neg <= dec_ix_br_neg;
-            ix_ip_br_offset <= dec_ix_imm[20:0];
-            ix_ip_br_base <= br_base;
-            ix_ip_br_is_call <= dec_ix_br_is_call;
-            ix_ip_br_is_ret <= dec_ix_br_is_ret;
-            ix_ip_operand1 <= operand1_value;
-            ix_ip_operand2 <= operand2_value;
-            ix_ip_bp <= dec_ix_bp;
-            ix_ip_bp_track <= dec_ix_bp_track;
-            ix_ip_bt <= dec_ix_bt;
-            ix_ip_wb_en <= dec_ix_wb_en;
-            ix_ip_dst <= dec_ix_rd;
-            ix_ip_pc <= dec_ix_pc;
-            ix_ip_valid <= 1'b1;
+            ix_ip0_op <= dec0_ix_op;
+            ix_ip0_option <= dec0_ix_option;
+            ix_ip0_truncate <= dec0_ix_truncate;
+            ix_ip0_br_type <= dec0_ix_br_type;
+            ix_ip0_br_neg <= dec0_ix_br_neg;
+            ix_ip0_br_offset <= dec0_ix_imm[20:0];
+            ix_ip0_br_base <= br_base_dec0;
+            ix_ip0_br_is_call <= dec0_ix_br_is_call;
+            ix_ip0_br_is_ret <= dec0_ix_br_is_ret;
+            ix_ip0_operand1 <= operand1_dec0_value;
+            ix_ip0_operand2 <= operand2_dec0_value;
+            ix_ip0_bp <= dec0_ix_bp;
+            ix_ip0_bp_track <= dec0_ix_bp_track;
+            ix_ip0_bt <= dec0_ix_bt;
+            ix_ip0_wb_en <= dec0_ix_wb_en;
+            ix_ip0_dst <= dec0_ix_rd;
+            ix_ip0_pc <= dec0_ix_pc;
+            ix_ip0_valid <= 1'b1;
         end
-        else if (ix_ip_ready || pipe_flush) begin
-            ix_ip_valid <= 1'b0;
+        else if (ix_ip0_ready || pipe_flush) begin
+            ix_ip0_valid <= 1'b0;
+        end
+        if (ix_issue_ip1) begin
+            ix_ip1_op <= dec1_ix_op;
+            ix_ip1_option <= dec1_ix_option;
+            ix_ip1_truncate <= dec1_ix_truncate;
+            ix_ip1_operand1 <= operand1_dec1_value;
+            ix_ip1_operand2 <= operand2_dec1_value;
+            ix_ip1_wb_en <= dec1_ix_wb_en;
+            ix_ip1_dst <= dec1_ix_rd;
+            ix_ip1_pc <= dec1_ix_pc;
+            ix_ip1_valid <= 1'b1;
+        end
+        else if (ix_ip1_ready || pipe_flush) begin
+            ix_ip1_valid <= 1'b0;
         end
         if (ix_issue_lsp) begin
-            ix_lsp_base <= operand1_value;
-            ix_lsp_offset <= dec_ix_imm[11:0];
-            ix_lsp_source <= operand2_value;
-            ix_lsp_mem_sign <= dec_ix_mem_sign;
-            ix_lsp_mem_width <= dec_ix_mem_width;
-            ix_lsp_wb_en <= dec_ix_wb_en;
-            ix_lsp_dst <= dec_ix_rd;
-            ix_lsp_pc <= dec_ix_pc;
+            ix_lsp_base <= (ix_issue_lsp_dec0) ? operand1_dec0_value : operand1_dec1_value;
+            ix_lsp_offset <= (ix_issue_lsp_dec0) ? dec0_ix_imm[11:0] : dec1_ix_imm[11:0];
+            ix_lsp_source <= (ix_issue_lsp_dec0) ? operand2_dec0_value : operand2_dec1_value;
+            ix_lsp_mem_sign <= (ix_issue_lsp_dec0) ? dec0_ix_mem_sign : dec1_ix_mem_sign;
+            ix_lsp_mem_width <= (ix_issue_lsp_dec0) ? dec0_ix_mem_width : dec1_ix_mem_width;
+            ix_lsp_wb_en <= (ix_issue_lsp_dec0) ? dec0_ix_wb_en : dec1_ix_wb_en;
+            ix_lsp_dst <= (ix_issue_lsp_dec0) ? dec0_ix_rd : dec1_ix_rd;
+            ix_lsp_pc <= (ix_issue_lsp_dec0) ? dec0_ix_pc : dec1_ix_pc;
             ix_lsp_valid <= 1'b1;
         end
         else if (ix_lsp_ready || pipe_flush) begin
             ix_lsp_valid <= 1'b0;
         end
         if (ix_issue_md) begin
-            ix_md_pc <= dec_ix_pc;
-            ix_md_dst <= dec_ix_rd;
-            ix_md_operand1 <= operand1_value;
-            ix_md_operand2 <= operand2_value;
-            ix_md_md_op <= dec_ix_md_op;
-            ix_md_muldiv <= dec_ix_muldiv;
+            ix_md_pc <= (ix_issue_md_dec0) ? dec0_ix_pc : dec1_ix_pc;
+            ix_md_dst <= (ix_issue_md_dec0) ? dec0_ix_rd : dec1_ix_rd;
+            ix_md_operand1 <= (ix_issue_md_dec0) ? operand1_dec0_value : operand1_dec1_value;
+            ix_md_operand2 <= (ix_issue_md_dec0) ? operand2_dec0_value : operand2_dec1_value;
+            ix_md_md_op <= (ix_issue_md_dec0) ? dec0_ix_md_op : dec1_ix_md_op;
+            ix_md_muldiv <= (ix_issue_md_dec0) ? dec0_ix_muldiv : dec1_ix_muldiv;
             ix_md_valid <= 1'b1;
         end
         else if (ix_md_ready || pipe_flush) begin
@@ -453,15 +707,15 @@ module ix(
         // Trap waits for all preceeding instructions to complete and blocks all
         // proceeding instructions, so it shouldn't be affected by pipe flush
         if (ix_issue_trap) begin
-            ix_trap_pc <= dec_ix_pc;
-            ix_trap_dst <= dec_ix_rd;
-            ix_trap_csr_op <= dec_ix_csr_op;
-            ix_trap_csr_id <= dec_ix_imm[11:0];
-            ix_trap_csr_opr <= operand1_value;
-            ix_trap_mret <= dec_ix_mret;
-            ix_trap_int <= dec_ix_intr;
+            ix_trap_pc <= dec0_ix_pc;
+            ix_trap_dst <= dec0_ix_rd;
+            ix_trap_csr_op <= dec0_ix_csr_op;
+            ix_trap_csr_id <= dec0_ix_imm[11:0];
+            ix_trap_csr_opr <= operand1_dec0_value;
+            ix_trap_mret <= dec0_ix_mret;
+            ix_trap_int <= dec0_ix_intr;
             ix_trap_intexc <= `MCAUSE_EXCEPTION;
-            ix_trap_cause <= dec_ix_cause;
+            ix_trap_cause <= dec0_ix_cause;
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end
@@ -478,7 +732,7 @@ module ix(
         end
         else if (int_pending) begin
             // Respond to interrupt
-            ix_trap_pc <= dec_ix_pc;
+            ix_trap_pc <= dec0_ix_pc;
             //ix_trap_dst <= 5'bx;
             //ix_trap_csr_op <= 2'bx;
             //ix_trap_csr_id <= 12'bx;
@@ -503,7 +757,8 @@ module ix(
         end
 
         if (rst) begin
-            ix_ip_valid <= 1'b0;
+            ix_ip0_valid <= 1'b0;
+            ix_ip1_valid <= 1'b0;
             ix_lsp_valid <= 1'b0;
             ix_md_valid <= 1'b0;
             ix_trap_valid <= 1'b0;

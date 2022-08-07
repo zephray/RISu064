@@ -24,6 +24,7 @@
 //
 
 // System options
+//`define USE_L1_CACHE
 
 // 2**BTB_ABITS == BTB_DEPTH
 `define BTB_ABITS       5
@@ -32,11 +33,13 @@
 // 2**BHT_ABITS == BHT_DEPTH
 `define BHT_ABITS       12
 `define BHT_DEPTH       4096
+// BHT memory is 8-bit wide
+`define BHT_MEM_ABITS   (`BHT_ABITS - 2)
+`define BHT_MEM_DEPTH   (`BHT_DEPTH / 4)
 
 // Branch predictor
 //`define BPU_ALWAYS_NOT_TAKEN
 //`define BPU_ALWAYS_TAKEN
-//`define BPU_SIMPLE
 //`define BPU_GLOBAL_BIMODAL
 //`define BPU_GLOBAL_GSHARE
 //`define BPU_GLOBAL_GSELECT

@@ -32,20 +32,32 @@ module rf(
     output wire [63:0]  rf_rdata0,
     input  wire [4:0]   rf_rsrc1,
     output wire [63:0]  rf_rdata1,
-    input  wire         rf_wen,
-    input  wire [4:0]   rf_wdst,
-    input  wire [63:0]  rf_wdata
+    input  wire [4:0]   rf_rsrc2,
+    output wire [63:0]  rf_rdata2,
+    input  wire [4:0]   rf_rsrc3,
+    output wire [63:0]  rf_rdata3,
+    input  wire         rf_wen0,
+    input  wire [4:0]   rf_wdst0,
+    input  wire [63:0]  rf_wdata0,
+    input  wire         rf_wen1,
+    input  wire [4:0]   rf_wdst1,
+    input  wire [63:0]  rf_wdata1
 );
 
     reg [63:0] rf_array [31:1];
 
     always @(posedge clk) begin
-        if (rf_wen) begin
-            rf_array[rf_wdst] <= rf_wdata;
+        if (rf_wen0) begin
+            rf_array[rf_wdst0] <= rf_wdata0;
+        end
+        if (rf_wen1) begin
+            rf_array[rf_wdst1] <= rf_wdata1;
         end
     end
 
     assign rf_rdata0 = rf_array[rf_rsrc0];
     assign rf_rdata1 = rf_array[rf_rsrc1];
+    assign rf_rdata2 = rf_array[rf_rsrc2];
+    assign rf_rdata3 = rf_array[rf_rsrc3];
 
 endmodule

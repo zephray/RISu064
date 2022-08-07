@@ -24,164 +24,79 @@
 //
 `include "defines.vh"
 
-// This module wraps one or more combinational decoder units and wrap it with
-// pipeline registers
+// This module wraps 2 dec_bundled and run them through a 2w2r fifo
 module dec(
     input  wire         clk,
     input  wire         rst,
     input  wire         pipe_flush,
     // IF interface
-    input  wire [63:0]  if_dec_pc,
-    input  wire [31:0]  if_dec_instr,
-    input  wire         if_dec_bp,
-    input  wire [1:0]   if_dec_bp_track,
-    input  wire [63:0]  if_dec_bt,
-    input  wire         if_dec_valid,
+    // dec1 higher address
+    input  wire [63:0]  if_dec1_pc,
+    input  wire [31:0]  if_dec1_instr,
+    input  wire         if_dec1_bp,
+    input  wire [1:0]   if_dec1_bp_track,
+    input  wire [63:0]  if_dec1_bt,
+    input  wire         if_dec1_valid,
+    // dec0 lower address
+    input  wire [63:0]  if_dec0_pc,
+    input  wire [31:0]  if_dec0_instr,
+    input  wire         if_dec0_bp,
+    input  wire [1:0]   if_dec0_bp_track,
+    input  wire [63:0]  if_dec0_bt,
+    input  wire         if_dec0_valid,
     output wire         if_dec_ready,
     // IX interface
-    output reg  [63:0]  dec_ix_pc,
-    output reg          dec_ix_bp,
-    output reg  [1:0]   dec_ix_bp_track,
-    output reg  [63:0]  dec_ix_bt,
-    output reg  [3:0]   dec_ix_op,
-    output reg          dec_ix_option,
-    output reg          dec_ix_truncate,
-    output reg  [1:0]   dec_ix_br_type,
-    output reg          dec_ix_br_neg,
-    output reg          dec_ix_br_base_src,
-    output reg          dec_ix_br_inj_pc,
-    output reg          dec_ix_br_is_call,
-    output reg          dec_ix_br_is_ret,
-    output reg          dec_ix_mem_sign,
-    output reg  [1:0]   dec_ix_mem_width,
-    output reg  [1:0]   dec_ix_csr_op,
-    output reg          dec_ix_mret,
-    output reg          dec_ix_intr,
-    output reg  [3:0]   dec_ix_cause,
-    output reg  [2:0]   dec_ix_md_op,
-    output reg          dec_ix_muldiv,
-    output reg  [2:0]   dec_ix_op_type,
-    output reg  [1:0]   dec_ix_operand1,
-    output reg  [1:0]   dec_ix_operand2,
-    output reg  [63:0]  dec_ix_imm,
-    output reg          dec_ix_legal,
-    output reg          dec_ix_wb_en,
-    output reg  [4:0]   dec_ix_rs1,
-    output reg  [4:0]   dec_ix_rs2,
-    output reg  [4:0]   dec_ix_rd,
-    output reg          dec_ix_fencei,
-    output reg          dec_ix_valid,
-    input  wire         dec_ix_ready
+    output wire [247:0] dec1_ix_bundle,
+    output wire         dec1_ix_valid,
+    input  wire         dec1_ix_ready,
+    output wire [247:0] dec0_ix_bundle,
+    output wire         dec0_ix_valid,
+    input  wire         dec0_ix_ready
 );
 
-    wire [3:0] dec_op;
-    wire dec_option;
-    wire dec_truncate;
-    wire [1:0] dec_br_type;
-    wire dec_br_neg;
-    wire dec_br_base_src;
-    wire dec_br_inj_pc;
-    wire dec_br_is_call;
-    wire dec_br_is_ret;
-    wire dec_mem_sign;
-    wire [1:0] dec_mem_width;
-    wire [1:0] dec_csr_op;
-    wire dec_mret;
-    wire dec_intr;
-    wire [3:0] dec_cause;
-    wire [2:0] dec_md_op;
-    wire dec_muldiv;
-    wire [2:0] dec_op_type;
-    wire [1:0] dec_operand1;
-    wire [1:0] dec_operand2;
-    wire [63:0] dec_imm;
-    wire dec_legal;
-    wire dec_wb_en;
-    wire [4:0] dec_rs1;
-    wire [4:0] dec_rs2;
-    wire [4:0] dec_rd;
-    wire dec_fencei;
-    du du0(
-        .instr(if_dec_instr),
-        .op(dec_op),
-        .option(dec_option),
-        .truncate(dec_truncate),
-        .br_type(dec_br_type),
-        .br_neg(dec_br_neg),
-        .br_base_src(dec_br_base_src),
-        .br_inj_pc(dec_br_inj_pc),
-        .br_is_call(dec_br_is_call),
-        .br_is_ret(dec_br_is_ret),
-        .mem_sign(dec_mem_sign),
-        .mem_width(dec_mem_width),
-        .csr_op(dec_csr_op),
-        .mret(dec_mret),
-        .intr(dec_intr),
-        .cause(dec_cause),
-        .md_op(dec_md_op),
-        .muldiv(dec_muldiv),
-        .op_type(dec_op_type),
-        .operand1(dec_operand1),
-        .operand2(dec_operand2),
-        .imm(dec_imm),
-        .legal(dec_legal),
-        .wb_en(dec_wb_en),
-        .rs1(dec_rs1),
-        .rs2(dec_rs2),
-        .rd(dec_rd),
-        .fencei(dec_fencei)
+    wire [247:0] dec0_bundle;
+    wire [247:0] dec1_bundle;
+
+    dec_bundled dec0(
+        // IF interface
+        .if_dec_pc(if_dec0_pc),
+        .if_dec_instr(if_dec0_instr),
+        .if_dec_bp(if_dec0_bp),
+        .if_dec_bp_track(if_dec0_bp_track),
+        .if_dec_bt(if_dec0_bt),
+        // IX interface
+        .dec_ix_bundle(dec0_bundle)
     );
 
-    always @(posedge clk) begin
-        if (rst) begin
-            dec_ix_valid <= 1'b0;
-        end
-        else begin
-            if (pipe_flush) begin
-                dec_ix_valid <= 1'b0;
-            end
-            else if (if_dec_ready) begin
-                dec_ix_valid <= if_dec_valid;
-            end
-        end
-    end
+    dec_bundled dec1(
+        // IF interface
+        .if_dec_pc(if_dec1_pc),
+        .if_dec_instr(if_dec1_instr),
+        .if_dec_bp(if_dec1_bp),
+        .if_dec_bp_track(if_dec1_bp_track),
+        .if_dec_bt(if_dec1_bt),
+        // IX interface
+        .dec_ix_bundle(dec1_bundle)
+    );
 
-    always @(posedge clk) begin
-        if (if_dec_ready) begin
-            dec_ix_pc <= if_dec_pc;
-            dec_ix_bp <= if_dec_bp;
-            dec_ix_bp_track <= if_dec_bp_track;
-            dec_ix_bt <= if_dec_bt;
-            dec_ix_op <= dec_op;
-            dec_ix_option <= dec_option;
-            dec_ix_truncate <= dec_truncate;
-            dec_ix_br_type <= dec_br_type;
-            dec_ix_br_neg <= dec_br_neg;
-            dec_ix_br_base_src <= dec_br_base_src;
-            dec_ix_br_inj_pc <= dec_br_inj_pc;
-            dec_ix_br_is_call <= dec_br_is_call;
-            dec_ix_br_is_ret <= dec_br_is_ret;
-            dec_ix_mem_sign <= dec_mem_sign;
-            dec_ix_mem_width <= dec_mem_width;
-            dec_ix_csr_op <= dec_csr_op;
-            dec_ix_mret <= dec_mret;
-            dec_ix_intr <= dec_intr;
-            dec_ix_cause <= dec_cause;
-            dec_ix_md_op <= dec_md_op;
-            dec_ix_muldiv <= dec_muldiv;
-            dec_ix_op_type <= dec_op_type;
-            dec_ix_operand1 <= dec_operand1;
-            dec_ix_operand2 <= dec_operand2;
-            dec_ix_imm <= dec_imm;
-            dec_ix_legal <= dec_legal;
-            dec_ix_wb_en <= dec_wb_en;
-            dec_ix_rs1 <= dec_rs1;
-            dec_ix_rs2 <= dec_rs2;
-            dec_ix_rd <= dec_rd;
-            dec_ix_fencei <= dec_fencei;
-        end
-    end
-
-    assign if_dec_ready = dec_ix_ready;
+    // TODO: IFQ in IF stage could probably be removed entirely, favoring
+    // this decoded instruction queue
+    fifo_2w2r #(.WIDTH(248), .ABITS(2)) iq (
+        .clk(clk),
+        .rst(rst || pipe_flush),
+        .a1_data(dec1_bundle),
+        .a1_valid(if_dec1_valid),
+        .a0_data(dec0_bundle),
+        .a0_valid(if_dec0_valid),
+        .a_ready(if_dec_ready),
+        .a_almost_full(),
+        .a_full(),
+        .b1_data(dec1_ix_bundle),
+        .b1_valid(dec1_ix_valid),
+        .b1_ready(dec1_ix_ready),
+        .b0_data(dec0_ix_bundle),
+        .b0_valid(dec0_ix_valid),
+        .b0_ready(dec0_ix_ready)
+    );
 
 endmodule

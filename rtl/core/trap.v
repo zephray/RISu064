@@ -53,7 +53,7 @@ module trap(
     output reg          trap_wb_valid,
     input  wire         trap_wb_ready,
     // From writeback, for counting
-    input  wire [1:0]   wb_trap_instret, // Number of instructions retired
+    input  wire [2:0]   wb_trap_instret, // Number of instructions retired
     // To instruction fetch unit
     output reg          trap_if_pc_override,
     output reg  [63:0]  trap_if_new_pc
@@ -105,7 +105,7 @@ module trap(
     always @(posedge clk) begin
         // If not otherwise modified, update values
         mcycle <= mcycle + 1;
-        minstret <= minstret + {62'b0, wb_trap_instret};
+        minstret <= minstret + {61'b0, wb_trap_instret};
         mip <= mip | extint_pending_overlay;
 
         // Update external interrupt reg

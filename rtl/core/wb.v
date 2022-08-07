@@ -25,24 +25,34 @@
 `include "defines.vh"
 
 module wb(
-    /* verilator lint_off UNUSED */
     input  wire         clk,
     input  wire         rst,
-    /* verilator lint_on UNUSED */
     // To register file
-    output wire         rf_wen,
-    output wire [4:0]   rf_wdst,
-    output wire [63:0]  rf_wdata,
-    // From integer pipe
-    input  wire [4:0]   ip_wb_dst,
-    input  wire [63:0]  ip_wb_result,
+    output wire         rf_wen0,
+    output wire [4:0]   rf_wdst0,
+    output wire [63:0]  rf_wdata0,
+    output wire         rf_wen1,
+    output wire [4:0]   rf_wdst1,
+    output wire [63:0]  rf_wdata1,
+    // From integer pipe 0
+    input  wire [4:0]   ip0_wb_dst,
+    input  wire [63:0]  ip0_wb_result,
     /* verilator lint_off UNUSED */
-    input  wire [63:0]  ip_wb_pc,
+    input  wire [63:0]  ip0_wb_pc,
     /* verilator lint_on UNUSED */
-    input  wire         ip_wb_wb_en,
-    input  wire         ip_wb_hipri,
-    input  wire         ip_wb_valid,
-    output wire         ip_wb_ready,
+    input  wire         ip0_wb_wb_en,
+    input  wire         ip0_wb_hipri,
+    input  wire         ip0_wb_valid,
+    output wire         ip0_wb_ready,
+    // From integer pipe 1
+    input  wire [4:0]   ip1_wb_dst,
+    input  wire [63:0]  ip1_wb_result,
+    /* verilator lint_off UNUSED */
+    input  wire [63:0]  ip1_wb_pc,
+    /* verilator lint_on UNUSED */
+    input  wire         ip1_wb_wb_en,
+    input  wire         ip1_wb_valid,
+    output wire         ip1_wb_ready,
     // From load-store pipe
     input  wire [4:0]   lsp_wb_dst,
     input  wire [63:0]  lsp_wb_result,
@@ -74,7 +84,7 @@ module wb(
     output wire [4:0]   wb_ix_buf_dst,
     output wire         wb_ix_buf_valid,
     // To trap unit
-    output wire [1:0]   wb_trap_instret
+    output wire [2:0]   wb_trap_instret
 );
 
     // Buffer up to 1 wb request when collision is detected
@@ -84,43 +94,134 @@ module wb(
     reg [63:0] wb_buf_pc;
 
     // Writeback
-    wire ip_wb_req = ip_wb_valid && ip_wb_wb_en;
+    wire ip0_wb_req = ip0_wb_valid && ip0_wb_wb_en;
+    wire ip1_wb_req = ip1_wb_valid && ip1_wb_wb_en;
     wire lsp_wb_req = lsp_wb_valid && lsp_wb_wb_en;
     wire md_wb_req = md_wb_valid;
     wire trap_wb_req = trap_wb_valid && trap_wb_wb_en;
     // Retire without writeback
-    wire ip_rwowb_req = ip_wb_valid && !ip_wb_wb_en;
+    wire ip0_rwowb_req = ip0_wb_valid && !ip0_wb_wb_en;
+    // IP1 won't retire without writeback
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
-    // Current priority: buf > lsp > md > ip > trap.
-    // Though trap shouldn't have collision with other types.
-    // The buf should is prioritized to ensure data flowing.
-    wire buf_wb_ac = (!ip_wb_hipri) && wb_buf_valid;
-    wire lsp_wb_ac = (!buf_wb_ac && !ip_wb_hipri) && lsp_wb_req;
-    wire md_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !ip_wb_hipri) && md_wb_req;
-    wire ip_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !md_wb_ac) && ip_wb_req;
-    wire trap_wb_ac = (!buf_wb_ac && !lsp_wb_ac && !md_wb_ac && !ip_wb_ac) && trap_wb_req;
+    // Current priority: buf > lsp > md > ip0 > ip1 > trap.
+    reg buf_wb_ac;
+    reg lsp_wb_ac;
+    reg md_wb_ac;
+    reg ip0_wb_ac;
+    reg ip1_wb_ac;
+    reg trap_wb_ac;
+    reg [2:0] wb0_src;
+    reg [2:0] wb1_src;
+
+    localparam WB_SRC_NONE = 3'd0;
+    localparam WB_SRC_BUF = 3'd1;
+    localparam WB_SRC_LSP = 3'd2;
+    localparam WB_SRC_MD = 3'd3;
+    localparam WB_SRC_IP0 = 3'd4;
+    localparam WB_SRC_IP1 = 3'd5;
+    localparam WB_SRC_TRAP = 3'd6;
+
+    always @(*) begin
+        buf_wb_ac = 1'b0;
+        lsp_wb_ac = 1'b0;
+        md_wb_ac = 1'b0;
+        ip0_wb_ac = 1'b0;
+        ip1_wb_ac = 1'b0;
+        trap_wb_ac = 1'b0;
+        wb0_src = WB_SRC_NONE;
+        wb1_src = WB_SRC_NONE;
+        if (ip0_wb_req && ip0_wb_hipri) begin
+            wb0_src = WB_SRC_IP0;
+            ip0_wb_ac = 1'b1;
+        end
+        if (wb_buf_valid) begin
+            wb1_src = WB_SRC_BUF;
+            buf_wb_ac = 1'b1;
+        end
+        if (lsp_wb_req) begin
+            if (wb0_src == WB_SRC_NONE) begin
+                wb0_src = WB_SRC_LSP;
+                lsp_wb_ac = 1'b1;
+            end
+            else if (wb1_src == WB_SRC_NONE) begin 
+                wb1_src = WB_SRC_LSP;
+                lsp_wb_ac = 1'b1;
+            end
+        end
+        if (md_wb_req) begin
+            if (wb0_src == WB_SRC_NONE) begin
+                wb0_src = WB_SRC_MD;
+                md_wb_ac = 1'b1;
+            end
+            else if (wb1_src == WB_SRC_NONE) begin 
+                wb1_src = WB_SRC_MD;
+                md_wb_ac = 1'b1;
+            end
+        end
+        if (ip0_wb_req && !ip0_wb_hipri) begin
+            if (wb0_src == WB_SRC_NONE) begin
+                wb0_src = WB_SRC_IP0;
+                ip0_wb_ac = 1'b1;
+            end
+            else if (wb1_src == WB_SRC_NONE) begin 
+                wb1_src = WB_SRC_IP0;
+                ip0_wb_ac = 1'b1;
+            end
+        end
+        if (ip1_wb_req) begin
+            if (wb0_src == WB_SRC_NONE) begin
+                wb0_src = WB_SRC_IP1;
+                ip1_wb_ac = 1'b1;
+            end
+            else if (wb1_src == WB_SRC_NONE) begin 
+                wb1_src = WB_SRC_IP1;
+                ip1_wb_ac = 1'b1;
+            end
+        end
+        if (trap_wb_req) begin
+            wb0_src = WB_SRC_TRAP;
+            trap_wb_ac = 1'b1;
+        end
+    end
 
     // Allow write to buffer either its empty or the value will be used this
     // cycle
     wire wb_buf_wr_common = !wb_buf_valid || buf_wb_ac;
     wire wb_buf_src_lsp = lsp_wb_req && !lsp_wb_ac && wb_buf_wr_common;
-    wire wb_buf_src_ip = ip_wb_req && !wb_buf_src_lsp && !ip_wb_ac && wb_buf_wr_common;
+    wire wb_buf_src_ip0 = ip0_wb_req && !wb_buf_src_lsp && !ip0_wb_ac &&
+            wb_buf_wr_common;
+    wire wb_buf_src_ip1 = ip1_wb_req && !wb_buf_src_lsp && !wb_buf_src_ip0 &&
+            !ip1_wb_ac && wb_buf_wr_common;
 
-    wire wb_active = ip_wb_ac || lsp_wb_ac || md_wb_ac || trap_wb_ac || buf_wb_ac;
-    wire [4:0] wb_dst =
-            (ip_wb_ac) ? ip_wb_dst :
-            (lsp_wb_ac) ? lsp_wb_dst :
-            (md_wb_ac) ? md_wb_dst :
-            (trap_wb_ac) ? trap_wb_dst :
-            (buf_wb_ac) ? wb_buf_dst : 5'bx;
-    wire [63:0] wb_value =
-            (ip_wb_ac) ? ip_wb_result :
-            (lsp_wb_ac) ? lsp_wb_result :
-            (md_wb_ac) ? md_wb_result :
-            (trap_wb_ac) ? trap_wb_result :
-            (buf_wb_ac) ? wb_buf : 64'bx;
+    wire wb0_active = wb0_src != WB_SRC_NONE;
+    wire [4:0] wb0_dst =
+            (wb0_src == WB_SRC_TRAP) ? trap_wb_dst :
+            (wb0_src == WB_SRC_LSP) ? lsp_wb_dst :
+            (wb0_src == WB_SRC_MD) ? md_wb_dst :
+            (wb0_src == WB_SRC_IP0) ? ip0_wb_dst :
+            (wb0_src == WB_SRC_IP1) ? ip1_wb_dst : 5'bx;
+    wire [63:0] wb0_value =
+            (wb0_src == WB_SRC_TRAP) ? trap_wb_result :
+            (wb0_src == WB_SRC_LSP) ? lsp_wb_result :
+            (wb0_src == WB_SRC_MD) ? md_wb_result :
+            (wb0_src == WB_SRC_IP0) ? ip0_wb_result :
+            (wb0_src == WB_SRC_IP1) ? ip1_wb_result : 64'bx;
+
+    wire wb1_active = wb1_src != WB_SRC_NONE;
+    wire [4:0] wb1_dst =
+            (wb1_src == WB_SRC_BUF) ? wb_buf_dst :
+            (wb1_src == WB_SRC_LSP) ? lsp_wb_dst :
+            (wb1_src == WB_SRC_MD) ? md_wb_dst :
+            (wb1_src == WB_SRC_IP0) ? ip0_wb_dst :
+            (wb1_src == WB_SRC_IP1) ? ip1_wb_dst : 5'bx;
+    wire [63:0] wb1_value =
+            (wb1_src == WB_SRC_BUF) ? wb_buf :
+            (wb1_src == WB_SRC_LSP) ? lsp_wb_result :
+            (wb1_src == WB_SRC_MD) ? md_wb_result :
+            (wb1_src == WB_SRC_IP0) ? ip0_wb_result :
+            (wb1_src == WB_SRC_IP1) ? ip1_wb_result : 64'bx;
 
     always @(posedge clk) begin
         if (buf_wb_ac) begin
@@ -132,11 +233,17 @@ module wb(
             wb_buf_valid <= 1'b1;
             wb_buf_pc <= lsp_wb_pc;
         end
-        if (wb_buf_src_ip) begin
-            wb_buf <= ip_wb_result;
-            wb_buf_dst <= ip_wb_dst;
+        if (wb_buf_src_ip0) begin
+            wb_buf <= ip0_wb_result;
+            wb_buf_dst <= ip0_wb_dst;
             wb_buf_valid <= 1'b1;
-            wb_buf_pc <= ip_wb_pc;
+            wb_buf_pc <= ip0_wb_pc;
+        end
+        if (wb_buf_src_ip1) begin
+            wb_buf <= ip1_wb_result;
+            wb_buf_dst <= ip1_wb_dst;
+            wb_buf_valid <= 1'b1;
+            wb_buf_pc <= ip1_wb_pc;
         end
 
         if (rst) begin
@@ -149,19 +256,28 @@ module wb(
     assign wb_ix_buf_valid = wb_buf_valid;
 
     `ifdef VERBOSE
-    wire [63:0] wb_pc =
-            (ip_wb_ac) ? ip_wb_pc :
-            (lsp_wb_ac) ? lsp_wb_pc :
-            (md_wb_ac) ? md_wb_pc :
-            (trap_wb_ac) ? trap_wb_pc :
-            (buf_wb_ac) ? wb_buf_pc : 64'bx;
+    wire [63:0] wb0_pc =
+            (wb0_src == WB_SRC_TRAP) ? trap_wb_pc :
+            (wb0_src == WB_SRC_LSP) ? lsp_wb_pc :
+            (wb0_src == WB_SRC_MD) ? md_wb_pc :
+            (wb0_src == WB_SRC_IP0) ? ip0_wb_pc :
+            (wb0_src == WB_SRC_IP1) ? ip1_wb_pc : 64'bx;
+    wire [63:0] wb1_pc =
+            (wb1_src == WB_SRC_BUF) ? wb_buf_pc :
+            (wb1_src == WB_SRC_LSP) ? lsp_wb_pc :
+            (wb1_src == WB_SRC_MD) ? md_wb_pc :
+            (wb1_src == WB_SRC_IP0) ? ip0_wb_pc :
+            (wb1_src == WB_SRC_IP1) ? ip1_wb_pc : 64'bx;
     always @(posedge clk) begin
         begin
-            if (wb_active) begin
-                $display("PC %016x WB [%d] <- %016x", wb_pc, wb_dst, wb_value);
+            if (wb0_active) begin
+                $display("PC %016x WB [%d] <- %016x", wb0_pc, wb0_dst, wb0_value);
             end
-            if (ip_rwowb_req) begin
-                $display("PC %016x RETIRE FROM IP", ip_wb_pc);
+            if (wb1_active) begin
+                $display("PC %016x WB [%d] <- %016x", wb1_pc, wb1_dst, wb1_value);
+            end
+            if (ip0_rwowb_req) begin
+                $display("PC %016x RETIRE FROM IP", ip0_wb_pc);
             end
             if (lsp_rwowb_req) begin
                 $display("PC %016x RETIRE FROM LSP", lsp_wb_pc);
@@ -173,33 +289,42 @@ module wb(
     end
     `endif
 
-    assign rf_wen = wb_active;
-    assign rf_wdst = wb_dst;
-    assign rf_wdata = wb_value;
+    assign rf_wen0 = wb0_active;
+    assign rf_wdst0 = wb0_dst;
+    assign rf_wdata0 = wb0_value;
+
+    assign rf_wen1 = wb1_active;
+    assign rf_wdst1 = wb1_dst;
+    assign rf_wdata1 = wb1_value;
 
     // Acknowledge accepted wb, always acknowledge retire without writeback
-    assign ip_wb_ready = !(ip_wb_valid && (!ip_wb_ac && !ip_rwowb_req && !wb_buf_src_ip));
+    assign ip0_wb_ready = !(ip0_wb_valid && (!ip0_wb_ac && !ip0_rwowb_req && !wb_buf_src_ip0));
+    assign ip1_wb_ready = !(ip1_wb_valid && (!ip1_wb_ac && !wb_buf_src_ip1));
     assign lsp_wb_ready = !(lsp_wb_valid && (!lsp_wb_ac && !lsp_rwowb_req && !wb_buf_src_lsp));
     assign md_wb_ready = !(md_wb_valid && !md_wb_ac);
     assign trap_wb_ready = !(trap_wb_valid && (!trap_wb_ac && !trap_rwowb_req));
 
     // Instruction retire count
-    reg ip_retire;
+    reg ip0_retire;
+    reg ip1_retire;
     reg lsp_retire;
     reg md_retire;
     reg trap_retire;
     always @(posedge clk) begin
-        ip_retire <= (ip_wb_valid && ip_wb_ready);
+        ip0_retire <= (ip0_wb_valid && ip0_wb_ready);
+        ip1_retire <= (ip1_wb_valid && ip1_wb_ready);
         lsp_retire <= (lsp_wb_valid && lsp_wb_ready);
         md_retire <= md_wb_ac;
         trap_retire <= (trap_wb_valid && trap_wb_ready);
         if (rst) begin
-            ip_retire <= 1'b0;
+            ip0_retire <= 1'b0;
+            ip1_retire <= 1'b0;
             lsp_retire <= 1'b0;
             md_retire <= 1'b0;
             trap_retire <= 1'b0;
         end
     end
-    assign wb_trap_instret = ip_retire + lsp_retire + md_retire + trap_retire;
+    assign wb_trap_instret = {2'b0, ip0_retire} + {2'b0, ip1_retire} +
+            {2'b0, lsp_retire} + {2'b0, md_retire} + {2'b0, trap_retire};
 
 endmodule

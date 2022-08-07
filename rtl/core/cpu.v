@@ -23,6 +23,8 @@
 // SOFTWARE.
 //
 `include "defines.vh"
+// Vivado doesn't allow array inside module ports, so all decoding signals
+// has to be duplicated
 
 module cpu(
     input  wire         clk,
@@ -64,9 +66,16 @@ module cpu(
     wire [63:0] rf_rdata0;
     wire [4:0]  rf_rsrc1;
     wire [63:0] rf_rdata1;
-    wire        rf_wen;
-    wire [4:0]  rf_wdst;
-    wire [63:0] rf_wdata;
+    wire [4:0]  rf_rsrc2;
+    wire [63:0] rf_rdata2;
+    wire [4:0]  rf_rsrc3;
+    wire [63:0] rf_rdata3;
+    wire        rf_wen0;
+    wire [4:0]  rf_wdst0;
+    wire [63:0] rf_wdata0;
+    wire        rf_wen1;
+    wire [4:0]  rf_wdst1;
+    wire [63:0] rf_wdata1;
 
     rf rf(
         .clk(clk),
@@ -75,18 +84,31 @@ module cpu(
         .rf_rdata0(rf_rdata0),
         .rf_rsrc1(rf_rsrc1),
         .rf_rdata1(rf_rdata1),
-        .rf_wen(rf_wen),
-        .rf_wdst(rf_wdst),
-        .rf_wdata(rf_wdata)
+        .rf_rsrc2(rf_rsrc2),
+        .rf_rdata2(rf_rdata2),
+        .rf_rsrc3(rf_rsrc3),
+        .rf_rdata3(rf_rdata3),
+        .rf_wen0(rf_wen0),
+        .rf_wdst0(rf_wdst0),
+        .rf_wdata0(rf_wdata0),
+        .rf_wen1(rf_wen1),
+        .rf_wdst1(rf_wdst1),
+        .rf_wdata1(rf_wdata1)
     );
 
     // IF stage
-    wire [63:0] if_dec_pc;
-    wire [31:0] if_dec_instr;
-    wire        if_dec_bp;
-    wire [1:0]  if_dec_bp_track;
-    wire [63:0] if_dec_bt;
-    wire        if_dec_valid;
+    wire [63:0] if_dec1_pc;
+    wire [31:0] if_dec1_instr;
+    wire        if_dec1_bp;
+    wire [1:0]  if_dec1_bp_track;
+    wire [63:0] if_dec1_bt;
+    wire        if_dec1_valid;
+    wire [63:0] if_dec0_pc;
+    wire [31:0] if_dec0_instr;
+    wire        if_dec0_bp;
+    wire [1:0]  if_dec0_bp_track;
+    wire [63:0] if_dec0_bt;
+    wire        if_dec0_valid;
     wire        if_dec_ready;
     wire        ip_if_branch;
     wire        ip_if_branch_taken;
@@ -121,12 +143,18 @@ module cpu(
         .im_resp_rdata(im_resp_rdata),
         .im_resp_valid(im_resp_valid),
         // Decoder interface
-        .if_dec_pc(if_dec_pc),
-        .if_dec_instr(if_dec_instr),
-        .if_dec_bp(if_dec_bp),
-        .if_dec_bp_track(if_dec_bp_track),
-        .if_dec_bt(if_dec_bt),
-        .if_dec_valid(if_dec_valid),
+        .if_dec1_pc(if_dec1_pc),
+        .if_dec1_instr(if_dec1_instr),
+        .if_dec1_bp(if_dec1_bp),
+        .if_dec1_bp_track(if_dec1_bp_track),
+        .if_dec1_bt(if_dec1_bt),
+        .if_dec1_valid(if_dec1_valid),
+        .if_dec0_pc(if_dec0_pc),
+        .if_dec0_instr(if_dec0_instr),
+        .if_dec0_bp(if_dec0_bp),
+        .if_dec0_bp_track(if_dec0_bp_track),
+        .if_dec0_bt(if_dec0_bt),
+        .if_dec0_valid(if_dec0_valid),
         .if_dec_ready(if_dec_ready),
         // Next PC
         .ip_if_branch(ip_if_branch),
@@ -140,114 +168,77 @@ module cpu(
     );
 
     // Decode stage
-    wire [63:0] dec_ix_pc;
-    wire        dec_ix_bp;
-    wire [1:0]  dec_ix_bp_track;
-    wire [63:0] dec_ix_bt;
-    wire [3:0]  dec_ix_op;
-    wire        dec_ix_option;
-    wire        dec_ix_truncate;
-    wire [1:0]  dec_ix_br_type;
-    wire        dec_ix_br_neg;
-    wire        dec_ix_br_base_src;
-    wire        dec_ix_br_inj_pc;
-    wire        dec_ix_br_is_call;
-    wire        dec_ix_br_is_ret;
-    wire        dec_ix_mem_sign;
-    wire [1:0]  dec_ix_mem_width;
-    wire [1:0]  dec_ix_csr_op;
-    wire        dec_ix_mret;
-    wire        dec_ix_intr;
-    wire [3:0]  dec_ix_cause;
-    wire [2:0]  dec_ix_md_op;
-    wire        dec_ix_muldiv;
-    wire [1:0]  dec_ix_operand1;
-    wire [1:0]  dec_ix_operand2;
-    wire [63:0] dec_ix_imm;
-    wire [2:0]  dec_ix_op_type;
-    wire        dec_ix_legal;
-    wire        dec_ix_wb_en;
-    wire [4:0]  dec_ix_rs1;
-    wire [4:0]  dec_ix_rs2;
-    wire [4:0]  dec_ix_rd;
-    wire        dec_ix_fencei;
-    wire        dec_ix_valid;
-    wire        dec_ix_ready;
+    wire [247:0] dec1_ix_bundle;
+    wire         dec1_ix_valid;
+    wire         dec1_ix_ready;
+    wire [247:0] dec0_ix_bundle;
+    wire         dec0_ix_valid;
+    wire         dec0_ix_ready;
     dec dec(
         .clk(clk),
         .rst(rst),
         .pipe_flush(pipe_flush),
-        // IF interface
-        .if_dec_pc(if_dec_pc),
-        .if_dec_instr(if_dec_instr),
-        .if_dec_bp(if_dec_bp),
-        .if_dec_bp_track(if_dec_bp_track),
-        .if_dec_bt(if_dec_bt),
-        .if_dec_valid(if_dec_valid),
+        .if_dec1_pc(if_dec1_pc),
+        .if_dec1_instr(if_dec1_instr),
+        .if_dec1_bp(if_dec1_bp),
+        .if_dec1_bp_track(if_dec1_bp_track),
+        .if_dec1_bt(if_dec1_bt),
+        .if_dec1_valid(if_dec1_valid),
+        .if_dec0_pc(if_dec0_pc),
+        .if_dec0_instr(if_dec0_instr),
+        .if_dec0_bp(if_dec0_bp),
+        .if_dec0_bp_track(if_dec0_bp_track),
+        .if_dec0_bt(if_dec0_bt),
+        .if_dec0_valid(if_dec0_valid),
         .if_dec_ready(if_dec_ready),
-        // IX interface
-        .dec_ix_pc(dec_ix_pc),
-        .dec_ix_bp(dec_ix_bp),
-        .dec_ix_bp_track(dec_ix_bp_track),
-        .dec_ix_bt(dec_ix_bt),
-        .dec_ix_op(dec_ix_op),
-        .dec_ix_option(dec_ix_option),
-        .dec_ix_truncate(dec_ix_truncate),
-        .dec_ix_br_type(dec_ix_br_type),
-        .dec_ix_br_neg(dec_ix_br_neg),
-        .dec_ix_br_base_src(dec_ix_br_base_src),
-        .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
-        .dec_ix_br_is_call(dec_ix_br_is_call),
-        .dec_ix_br_is_ret(dec_ix_br_is_ret),
-        .dec_ix_mem_sign(dec_ix_mem_sign),
-        .dec_ix_mem_width(dec_ix_mem_width),
-        .dec_ix_csr_op(dec_ix_csr_op),
-        .dec_ix_mret(dec_ix_mret),
-        .dec_ix_intr(dec_ix_intr),
-        .dec_ix_md_op(dec_ix_md_op),
-        .dec_ix_muldiv(dec_ix_muldiv),
-        .dec_ix_cause(dec_ix_cause),
-        .dec_ix_op_type(dec_ix_op_type),
-        .dec_ix_operand1(dec_ix_operand1),
-        .dec_ix_operand2(dec_ix_operand2),
-        .dec_ix_imm(dec_ix_imm),
-        .dec_ix_legal(dec_ix_legal),
-        .dec_ix_wb_en(dec_ix_wb_en),
-        .dec_ix_rs1(dec_ix_rs1),
-        .dec_ix_rs2(dec_ix_rs2),
-        .dec_ix_rd(dec_ix_rd),
-        .dec_ix_fencei(dec_ix_fencei),
-        .dec_ix_valid(dec_ix_valid),
-        .dec_ix_ready(dec_ix_ready)
+        .dec1_ix_bundle(dec1_ix_bundle),
+        .dec1_ix_valid(dec1_ix_valid),
+        .dec1_ix_ready(dec1_ix_ready),
+        .dec0_ix_bundle(dec0_ix_bundle),
+        .dec0_ix_valid(dec0_ix_valid),
+        .dec0_ix_ready(dec0_ix_ready)
     );
 
     // Issue and writeback stage
-    wire [63:0] ix_ip_pc;
-    wire [4:0]  ix_ip_dst;
-    wire        ix_ip_wb_en;
-    wire [3:0]  ix_ip_op;
-    wire        ix_ip_option;
-    wire        ix_ip_truncate;
-    wire [1:0]  ix_ip_br_type;
-    wire        ix_ip_br_neg;
-    wire [63:0] ix_ip_br_base;
-    wire [20:0] ix_ip_br_offset;
-    wire        ix_ip_br_is_call;
-    wire        ix_ip_br_is_ret;
-    wire [63:0] ix_ip_operand1;
-    wire [63:0] ix_ip_operand2;
-    wire        ix_ip_bp;
-    wire [1:0]  ix_ip_bp_track;
-    wire [63:0] ix_ip_bt;
-    wire        ix_ip_valid;
-    wire        ix_ip_ready;
-    wire [63:0] ip_ix_forwarding;
-    wire [4:0]  ip_wb_dst;
-    wire [63:0] ip_wb_result;
-    wire [63:0] ip_wb_pc;
-    wire        ip_wb_wb_en;
-    wire        ip_wb_valid;
-    wire        ip_wb_ready;
+    wire [63:0] ix_ip0_pc;
+    wire [4:0]  ix_ip0_dst;
+    wire        ix_ip0_wb_en;
+    wire [3:0]  ix_ip0_op;
+    wire        ix_ip0_option;
+    wire        ix_ip0_truncate;
+    wire [1:0]  ix_ip0_br_type;
+    wire        ix_ip0_br_neg;
+    wire [63:0] ix_ip0_br_base;
+    wire [20:0] ix_ip0_br_offset;
+    wire        ix_ip0_br_is_call;
+    wire        ix_ip0_br_is_ret;
+    wire [63:0] ix_ip0_operand1;
+    wire [63:0] ix_ip0_operand2;
+    wire        ix_ip0_bp;
+    wire [1:0]  ix_ip0_bp_track;
+    wire [63:0] ix_ip0_bt;
+    wire        ix_ip0_valid;
+    wire        ix_ip0_ready;
+    wire [63:0] ix_ip1_pc;
+    wire [4:0]  ix_ip1_dst;
+    wire        ix_ip1_wb_en;
+    wire [3:0]  ix_ip1_op;
+    wire        ix_ip1_option;
+    wire        ix_ip1_truncate;
+    wire [63:0] ix_ip1_operand1;
+    wire [63:0] ix_ip1_operand2;
+    wire        ix_ip1_valid;
+    wire        ix_ip1_ready;
+    wire [63:0] ip0_ix_forwarding;
+    wire [4:0]  ip0_wb_dst;
+    wire [63:0] ip0_wb_result;
+    wire        ip0_wb_wb_en;
+    wire        ip0_wb_valid;
+    wire [63:0] ip1_ix_forwarding;
+    wire [4:0]  ip1_wb_dst;
+    wire [63:0] ip1_wb_result;
+    wire        ip1_wb_wb_en;
+    wire        ip1_wb_valid;
     wire [63:0] ix_lsp_pc;
     wire [4:0]  ix_lsp_dst;
     wire        ix_lsp_wb_en;
@@ -300,70 +291,64 @@ module cpu(
         .pipe_flush(pipe_flush),
         // Register file interface
         .rf_rsrc0(rf_rsrc0),
-        .rf_rsrc1(rf_rsrc1),
         .rf_rdata0(rf_rdata0),
+        .rf_rsrc1(rf_rsrc1),
         .rf_rdata1(rf_rdata1),
+        .rf_rsrc2(rf_rsrc2),
+        .rf_rdata2(rf_rdata2),
+        .rf_rsrc3(rf_rsrc3),
+        .rf_rdata3(rf_rdata3),
         // IX interface
-        .dec_ix_pc(dec_ix_pc),
-        .dec_ix_bp(dec_ix_bp),
-        .dec_ix_bp_track(dec_ix_bp_track),
-        .dec_ix_bt(dec_ix_bt),
-        .dec_ix_op(dec_ix_op),
-        .dec_ix_option(dec_ix_option),
-        .dec_ix_truncate(dec_ix_truncate),
-        .dec_ix_br_type(dec_ix_br_type),
-        .dec_ix_br_neg(dec_ix_br_neg),
-        .dec_ix_br_base_src(dec_ix_br_base_src),
-        .dec_ix_br_inj_pc(dec_ix_br_inj_pc),
-        .dec_ix_br_is_call(dec_ix_br_is_call),
-        .dec_ix_br_is_ret(dec_ix_br_is_ret),
-        .dec_ix_mem_sign(dec_ix_mem_sign),
-        .dec_ix_mem_width(dec_ix_mem_width),
-        .dec_ix_csr_op(dec_ix_csr_op),
-        .dec_ix_mret(dec_ix_mret),
-        .dec_ix_intr(dec_ix_intr),
-        .dec_ix_cause(dec_ix_cause),
-        .dec_ix_md_op(dec_ix_md_op),
-        .dec_ix_muldiv(dec_ix_muldiv),
-        .dec_ix_op_type(dec_ix_op_type),
-        .dec_ix_operand1(dec_ix_operand1),
-        .dec_ix_operand2(dec_ix_operand2),
-        .dec_ix_imm(dec_ix_imm),
-        .dec_ix_legal(dec_ix_legal),
-        .dec_ix_wb_en(dec_ix_wb_en),
-        .dec_ix_rs1(dec_ix_rs1),
-        .dec_ix_rs2(dec_ix_rs2),
-        .dec_ix_rd(dec_ix_rd),
-        .dec_ix_fencei(dec_ix_fencei),
-        .dec_ix_valid(dec_ix_valid),
-        .dec_ix_ready(dec_ix_ready),
+        .dec0_ix_bundle(dec0_ix_bundle),
+        .dec0_ix_valid(dec0_ix_valid),
+        .dec0_ix_ready(dec0_ix_ready),
+        .dec1_ix_bundle(dec1_ix_bundle),
+        .dec1_ix_valid(dec1_ix_valid),
+        .dec1_ix_ready(dec1_ix_ready),
         // FU interfaces
         // To integer pipe
-        .ix_ip_pc(ix_ip_pc),
-        .ix_ip_dst(ix_ip_dst),
-        .ix_ip_wb_en(ix_ip_wb_en),
-        .ix_ip_op(ix_ip_op),
-        .ix_ip_option(ix_ip_option),
-        .ix_ip_truncate(ix_ip_truncate),
-        .ix_ip_br_type(ix_ip_br_type),
-        .ix_ip_br_neg(ix_ip_br_neg),
-        .ix_ip_br_base(ix_ip_br_base),
-        .ix_ip_br_offset(ix_ip_br_offset),
-        .ix_ip_br_is_call(ix_ip_br_is_call),
-        .ix_ip_br_is_ret(ix_ip_br_is_ret),
-        .ix_ip_operand1(ix_ip_operand1),
-        .ix_ip_operand2(ix_ip_operand2),
-        .ix_ip_bp(ix_ip_bp),
-        .ix_ip_bp_track(ix_ip_bp_track),
-        .ix_ip_bt(ix_ip_bt),
-        .ix_ip_valid(ix_ip_valid),
-        .ix_ip_ready(ix_ip_ready),
+        .ix_ip0_pc(ix_ip0_pc),
+        .ix_ip0_dst(ix_ip0_dst),
+        .ix_ip0_wb_en(ix_ip0_wb_en),
+        .ix_ip0_op(ix_ip0_op),
+        .ix_ip0_option(ix_ip0_option),
+        .ix_ip0_truncate(ix_ip0_truncate),
+        .ix_ip0_br_type(ix_ip0_br_type),
+        .ix_ip0_br_neg(ix_ip0_br_neg),
+        .ix_ip0_br_base(ix_ip0_br_base),
+        .ix_ip0_br_offset(ix_ip0_br_offset),
+        .ix_ip0_br_is_call(ix_ip0_br_is_call),
+        .ix_ip0_br_is_ret(ix_ip0_br_is_ret),
+        .ix_ip0_operand1(ix_ip0_operand1),
+        .ix_ip0_operand2(ix_ip0_operand2),
+        .ix_ip0_bp(ix_ip0_bp),
+        .ix_ip0_bp_track(ix_ip0_bp_track),
+        .ix_ip0_bt(ix_ip0_bt),
+        .ix_ip0_valid(ix_ip0_valid),
+        .ix_ip0_ready(ix_ip0_ready),
         // Hazard detection & Bypassing
-        .ip_ix_forwarding(ip_ix_forwarding),
-        .ip_wb_dst(ip_wb_dst),
-        .ip_wb_result(ip_wb_result),
-        .ip_wb_wb_en(ip_wb_wb_en),
-        .ip_wb_valid(ip_wb_valid),
+        .ip0_ix_forwarding(ip0_ix_forwarding),
+        .ip0_wb_dst(ip0_wb_dst),
+        .ip0_wb_result(ip0_wb_result),
+        .ip0_wb_wb_en(ip0_wb_wb_en),
+        .ip0_wb_valid(ip0_wb_valid),
+        // To integer pipe 1
+        .ix_ip1_pc(ix_ip1_pc),
+        .ix_ip1_dst(ix_ip1_dst),
+        .ix_ip1_wb_en(ix_ip1_wb_en),
+        .ix_ip1_op(ix_ip1_op),
+        .ix_ip1_option(ix_ip1_option),
+        .ix_ip1_truncate(ix_ip1_truncate),
+        .ix_ip1_operand1(ix_ip1_operand1),
+        .ix_ip1_operand2(ix_ip1_operand2),
+        .ix_ip1_valid(ix_ip1_valid),
+        .ix_ip1_ready(ix_ip1_ready),
+        // Hazard detection & Bypassing
+        .ip1_ix_forwarding(ip1_ix_forwarding),
+        .ip1_wb_dst(ip1_wb_dst),
+        .ip1_wb_result(ip1_wb_result),
+        .ip1_wb_wb_en(ip1_wb_wb_en),
+        .ip1_wb_valid(ip1_wb_valid),
         // To load/ store pipe
         .ix_lsp_pc(ix_lsp_pc),
         .ix_lsp_dst(ix_lsp_dst),
@@ -426,40 +411,42 @@ module cpu(
         .ix_if_new_pc(ix_if_new_pc)
     );
 
-    wire ip_wb_hipri;
-    ip ip0(
+    wire [63:0] ip0_wb_pc;
+    wire ip0_wb_ready;
+    wire ip0_wb_hipri;
+    ip #(.IP_HANDLE_BRANCH(1)) ip0(
         .clk(clk),
         .rst(rst),
         // From issue
-        .ix_ip_pc(ix_ip_pc),
-        .ix_ip_dst(ix_ip_dst),
-        .ix_ip_wb_en(ix_ip_wb_en),
-        .ix_ip_op(ix_ip_op),
-        .ix_ip_option(ix_ip_option),
-        .ix_ip_truncate(ix_ip_truncate),
-        .ix_ip_br_type(ix_ip_br_type),
-        .ix_ip_br_neg(ix_ip_br_neg),
-        .ix_ip_br_base(ix_ip_br_base),
-        .ix_ip_br_offset(ix_ip_br_offset),
-        .ix_ip_br_is_call(ix_ip_br_is_call),
-        .ix_ip_br_is_ret(ix_ip_br_is_ret),
-        .ix_ip_operand1(ix_ip_operand1),
-        .ix_ip_operand2(ix_ip_operand2),
-        .ix_ip_bp(ix_ip_bp),
-        .ix_ip_bp_track(ix_ip_bp_track),
-        .ix_ip_bt(ix_ip_bt),
-        .ix_ip_valid(ix_ip_valid),
-        .ix_ip_ready(ix_ip_ready),
+        .ix_ip_pc(ix_ip0_pc),
+        .ix_ip_dst(ix_ip0_dst),
+        .ix_ip_wb_en(ix_ip0_wb_en),
+        .ix_ip_op(ix_ip0_op),
+        .ix_ip_option(ix_ip0_option),
+        .ix_ip_truncate(ix_ip0_truncate),
+        .ix_ip_br_type(ix_ip0_br_type),
+        .ix_ip_br_neg(ix_ip0_br_neg),
+        .ix_ip_br_base(ix_ip0_br_base),
+        .ix_ip_br_offset(ix_ip0_br_offset),
+        .ix_ip_br_is_call(ix_ip0_br_is_call),
+        .ix_ip_br_is_ret(ix_ip0_br_is_ret),
+        .ix_ip_operand1(ix_ip0_operand1),
+        .ix_ip_operand2(ix_ip0_operand2),
+        .ix_ip_bp(ix_ip0_bp),
+        .ix_ip_bp_track(ix_ip0_bp_track),
+        .ix_ip_bt(ix_ip0_bt),
+        .ix_ip_valid(ix_ip0_valid),
+        .ix_ip_ready(ix_ip0_ready),
         // Forwarding path back to issue
-        .ip_ix_forwarding(ip_ix_forwarding),
+        .ip_ix_forwarding(ip0_ix_forwarding),
         // To writeback
-        .ip_wb_dst(ip_wb_dst),
-        .ip_wb_result(ip_wb_result),
-        .ip_wb_pc(ip_wb_pc),
-        .ip_wb_wb_en(ip_wb_wb_en),
-        .ip_wb_hipri(ip_wb_hipri),
-        .ip_wb_valid(ip_wb_valid),
-        .ip_wb_ready(ip_wb_ready),
+        .ip_wb_dst(ip0_wb_dst),
+        .ip_wb_result(ip0_wb_result),
+        .ip_wb_pc(ip0_wb_pc),
+        .ip_wb_wb_en(ip0_wb_wb_en),
+        .ip_wb_hipri(ip0_wb_hipri),
+        .ip_wb_valid(ip0_wb_valid),
+        .ip_wb_ready(ip0_wb_ready),
         // To instruction fetch unit
         .ip_if_branch(ip_if_branch),
         .ip_if_branch_taken(ip_if_branch_taken),
@@ -468,8 +455,41 @@ module cpu(
         .ip_if_branch_is_ret(ip_if_branch_is_ret),
         .ip_if_branch_track(ip_if_branch_track),
         .ip_if_pc_override(ip_if_pc_override),
-        .ip_if_new_pc(ip_if_new_pc)
+        .ip_if_new_pc(ip_if_new_pc),
+        // Pipeline flush
+        .ip_abort(1'b0)
     );
+
+    wire [63:0] ip1_wb_pc;
+    wire ip1_wb_ready;
+    /* verilator lint_off PINMISSING */
+    ip #(.IP_HANDLE_BRANCH(0)) ip1(
+        .clk(clk),
+        .rst(rst),
+        // From issue
+        .ix_ip_pc(ix_ip1_pc),
+        .ix_ip_dst(ix_ip1_dst),
+        .ix_ip_wb_en(ix_ip1_wb_en),
+        .ix_ip_op(ix_ip1_op),
+        .ix_ip_option(ix_ip1_option),
+        .ix_ip_truncate(ix_ip1_truncate),
+        .ix_ip_operand1(ix_ip1_operand1),
+        .ix_ip_operand2(ix_ip1_operand2),
+        .ix_ip_valid(ix_ip1_valid),
+        .ix_ip_ready(ix_ip1_ready),
+        // Forwarding path back to issue
+        .ip_ix_forwarding(ip1_ix_forwarding),
+        // To writeback
+        .ip_wb_dst(ip1_wb_dst),
+        .ip_wb_result(ip1_wb_result),
+        .ip_wb_pc(ip1_wb_pc),
+        .ip_wb_wb_en(ip1_wb_wb_en),
+        .ip_wb_valid(ip1_wb_valid),
+        .ip_wb_ready(ip1_wb_ready),
+        // Pipeline flush
+        .ip_abort(pipe_flush)
+    );
+    /* verilator lint_on PINMISSING */
 
     lsp lsp(
         .clk(clk),
@@ -521,7 +541,7 @@ module cpu(
     wire trap_wb_wb_en;
     wire trap_wb_valid;
     wire trap_wb_ready;
-    wire [1:0] wb_trap_instret;
+    wire [2:0] wb_trap_instret;
     trap #(.HARTID(HARTID)) trap(
         .clk(clk),
         .rst(rst),
@@ -590,17 +610,27 @@ module cpu(
         .clk(clk),
         .rst(rst),
         // To register file
-        .rf_wen(rf_wen),
-        .rf_wdst(rf_wdst),
-        .rf_wdata(rf_wdata),
-        // From integer pipe
-        .ip_wb_dst(ip_wb_dst),
-        .ip_wb_result(ip_wb_result),
-        .ip_wb_pc(ip_wb_pc),
-        .ip_wb_wb_en(ip_wb_wb_en),
-        .ip_wb_hipri(ip_wb_hipri),
-        .ip_wb_valid(ip_wb_valid),
-        .ip_wb_ready(ip_wb_ready),
+        .rf_wen0(rf_wen0),
+        .rf_wdst0(rf_wdst0),
+        .rf_wdata0(rf_wdata0),
+        .rf_wen1(rf_wen1),
+        .rf_wdst1(rf_wdst1),
+        .rf_wdata1(rf_wdata1),
+        // From integer pipe 0
+        .ip0_wb_dst(ip0_wb_dst),
+        .ip0_wb_result(ip0_wb_result),
+        .ip0_wb_pc(ip0_wb_pc),
+        .ip0_wb_wb_en(ip0_wb_wb_en),
+        .ip0_wb_hipri(ip0_wb_hipri),
+        .ip0_wb_valid(ip0_wb_valid),
+        .ip0_wb_ready(ip0_wb_ready),
+        // From integer pipe 1
+        .ip1_wb_dst(ip1_wb_dst),
+        .ip1_wb_result(ip1_wb_result),
+        .ip1_wb_pc(ip1_wb_pc),
+        .ip1_wb_wb_en(ip1_wb_wb_en),
+        .ip1_wb_valid(ip1_wb_valid),
+        .ip1_wb_ready(ip1_wb_ready),
         // From load-store pipe
         .lsp_wb_dst(lsp_wb_dst),
         .lsp_wb_result(lsp_wb_result),

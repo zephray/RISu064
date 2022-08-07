@@ -484,7 +484,7 @@ module ix(
     wire [63:0] br_base_dec0 = (dec0_ix_br_base_src == `BB_PC) ? (dec0_ix_pc) :
             (rs_val[0]);
     wire [63:0] br_base_dec1 = (dec1_ix_br_base_src == `BB_PC) ? (dec1_ix_pc) :
-            (rs_val[0]);
+            (rs_val[2]);
 
     // Trap instruction also blocks all proceeding instructions
     reg trap_ongoing;
@@ -527,8 +527,8 @@ module ix(
     wire ix_barrier_done = ix_fenced_done && ix_ibarrier_done;
 
     reg ix_issue_ip0_dec0;
-    //reg ix_issue_ip0_dec1;
-    //reg ix_issue_ip1_dec0;
+    reg ix_issue_ip0_dec1;
+    reg ix_issue_ip1_dec0;
     reg ix_issue_ip1_dec1;
     reg ix_issue_lsp_dec0;
     reg ix_issue_lsp_dec1;
@@ -541,8 +541,8 @@ module ix(
     reg ix_issue_dec1;
     always @(*) begin
         ix_issue_ip0_dec0 = 0;
-        //ix_issue_ip0_dec1 = 0;
-        //ix_issue_ip1_dec0 = 0;
+        ix_issue_ip0_dec1 = 0;
+        ix_issue_ip1_dec0 = 0;
         ix_issue_ip1_dec1 = 0;
         ix_issue_lsp_dec0 = 0;
         ix_issue_lsp_dec1 = 0;
@@ -554,9 +554,15 @@ module ix(
         ix_issue_dec1 = 0;
         if (ix_issue_common && dec0_ix_valid && ix_dec0_opr_ready) begin
             // Trap and fence are not handled here
-            if (dec0_is_int && waw_ip_dec0 && ix_ip0_ready) begin
-                ix_issue_dec0 = 1;
-                ix_issue_ip0_dec0 = 1;
+            if (dec0_is_int && waw_ip_dec0) begin
+                if (ix_ip1_ready) begin
+                    ix_issue_dec0 = 1;
+                    ix_issue_ip1_dec0 = 1;
+                end
+                else if (ix_ip0_ready) begin
+                    ix_issue_dec0 = 1;
+                    ix_issue_ip0_dec0 = 1;
+                end
             end
             if (dec0_is_branch && waw_ip_dec0 && ix_ip0_ready &&
                     !lsp_req_pending && !md_req_pending) begin
@@ -583,9 +589,20 @@ module ix(
 
             if (ix_issue_dec0 && ix_interdep_check && ix_dec1_opr_ready) begin
                 // Can issue the second one?
-                if (dec1_is_int && waw_ip_dec1 && ix_ip1_ready) begin
+                if (dec1_is_int && waw_ip_dec1) begin
+                    if (!ix_issue_ip0_dec0 && ix_ip0_ready) begin
+                        ix_issue_dec1 = 1;
+                        ix_issue_ip0_dec1 = 1;
+                    end
+                    else if (!ix_issue_ip1_dec0 && ix_ip1_ready) begin
+                        ix_issue_dec1 = 1;
+                        ix_issue_ip1_dec1 = 1;
+                    end
+                end
+                else if (dec1_is_branch && waw_ip_dec1 && ix_ip0_ready &&
+                        !lsp_req_pending && !md_req_pending && !ix_issue_ip0_dec0) begin
                     ix_issue_dec1 = 1;
-                    ix_issue_ip1_dec1 = 1;
+                    ix_issue_ip0_dec1 = 1;
                 end
                 else if (dec1_is_ls && waw_lsp_dec1 && !dec0_is_ls && ix_lsp_ready) begin
                     ix_issue_dec1 = 1;
@@ -599,10 +616,10 @@ module ix(
         end
     end
 
-    //wire ix_issue_ip0 = ix_issue_ip0_dec0 || ix_issue_ip0_dec1;
-    wire ix_issue_ip0 = ix_issue_ip0_dec0;
-    //wire ix_issue_ip1 = ix_issue_ip1_dec0 || ix_issue_ip1_dec1;
-    wire ix_issue_ip1 = ix_issue_ip1_dec1;
+    wire ix_issue_ip0 = ix_issue_ip0_dec0 || ix_issue_ip0_dec1;
+    //wire ix_issue_ip0 = ix_issue_ip0_dec0;
+    wire ix_issue_ip1 = ix_issue_ip1_dec0 || ix_issue_ip1_dec1;
+    //wire ix_issue_ip1 = ix_issue_ip1_dec1;
     wire ix_issue_lsp = ix_issue_lsp_dec0 || ix_issue_lsp_dec1;
     wire ix_issue_md = ix_issue_md_dec0 || ix_issue_md_dec1;
 
@@ -642,37 +659,37 @@ module ix(
 
     always @(posedge clk) begin
         if (ix_issue_ip0) begin
-            ix_ip0_op <= dec0_ix_op;
-            ix_ip0_option <= dec0_ix_option;
-            ix_ip0_truncate <= dec0_ix_truncate;
-            ix_ip0_br_type <= dec0_ix_br_type;
-            ix_ip0_br_neg <= dec0_ix_br_neg;
-            ix_ip0_br_offset <= dec0_ix_imm[20:0];
-            ix_ip0_br_base <= br_base_dec0;
-            ix_ip0_br_is_call <= dec0_ix_br_is_call;
-            ix_ip0_br_is_ret <= dec0_ix_br_is_ret;
-            ix_ip0_operand1 <= operand1_dec0_value;
-            ix_ip0_operand2 <= operand2_dec0_value;
-            ix_ip0_bp <= dec0_ix_bp;
-            ix_ip0_bp_track <= dec0_ix_bp_track;
-            ix_ip0_bt <= dec0_ix_bt;
-            ix_ip0_wb_en <= dec0_ix_wb_en;
-            ix_ip0_dst <= dec0_ix_rd;
-            ix_ip0_pc <= dec0_ix_pc;
+            ix_ip0_op <= (ix_issue_ip0_dec0) ? dec0_ix_op : dec1_ix_op;
+            ix_ip0_option <= (ix_issue_ip0_dec0) ? dec0_ix_option : dec1_ix_option;
+            ix_ip0_truncate <= (ix_issue_ip0_dec0) ? dec0_ix_truncate : dec1_ix_truncate;
+            ix_ip0_br_type <= (ix_issue_ip0_dec0) ? dec0_ix_br_type : dec1_ix_br_type;
+            ix_ip0_br_neg <= (ix_issue_ip0_dec0) ? dec0_ix_br_neg : dec1_ix_br_neg;
+            ix_ip0_br_offset <= (ix_issue_ip0_dec0) ? dec0_ix_imm[20:0] : dec1_ix_imm[20:0];
+            ix_ip0_br_base <= (ix_issue_ip0_dec0) ? br_base_dec0 : br_base_dec1;
+            ix_ip0_br_is_call <= (ix_issue_ip0_dec0) ? dec0_ix_br_is_call : dec1_ix_br_is_call;
+            ix_ip0_br_is_ret <= (ix_issue_ip0_dec0) ? dec0_ix_br_is_ret : dec1_ix_br_is_ret;
+            ix_ip0_operand1 <= (ix_issue_ip0_dec0) ? operand1_dec0_value : operand1_dec1_value;
+            ix_ip0_operand2 <= (ix_issue_ip0_dec0) ? operand2_dec0_value : operand2_dec1_value;
+            ix_ip0_bp <= (ix_issue_ip0_dec0) ? dec0_ix_bp : dec1_ix_bp;
+            ix_ip0_bp_track <= (ix_issue_ip0_dec0) ? dec0_ix_bp_track : dec1_ix_bp_track;
+            ix_ip0_bt <= (ix_issue_ip0_dec0) ? dec0_ix_bt : dec1_ix_bt;
+            ix_ip0_wb_en <= (ix_issue_ip0_dec0) ? dec0_ix_wb_en : dec1_ix_wb_en;
+            ix_ip0_dst <= (ix_issue_ip0_dec0) ? dec0_ix_rd : dec1_ix_rd;
+            ix_ip0_pc <= (ix_issue_ip0_dec0) ? dec0_ix_pc : dec1_ix_pc;
             ix_ip0_valid <= 1'b1;
         end
         else if (ix_ip0_ready || pipe_flush) begin
             ix_ip0_valid <= 1'b0;
         end
         if (ix_issue_ip1) begin
-            ix_ip1_op <= dec1_ix_op;
-            ix_ip1_option <= dec1_ix_option;
-            ix_ip1_truncate <= dec1_ix_truncate;
-            ix_ip1_operand1 <= operand1_dec1_value;
-            ix_ip1_operand2 <= operand2_dec1_value;
-            ix_ip1_wb_en <= dec1_ix_wb_en;
-            ix_ip1_dst <= dec1_ix_rd;
-            ix_ip1_pc <= dec1_ix_pc;
+            ix_ip1_op <= (ix_issue_ip1_dec0) ? dec0_ix_op : dec1_ix_op;
+            ix_ip1_option <= (ix_issue_ip1_dec0) ? dec0_ix_option : dec1_ix_option;
+            ix_ip1_truncate <= (ix_issue_ip1_dec0) ? dec0_ix_truncate : dec1_ix_truncate;
+            ix_ip1_operand1 <= (ix_issue_ip1_dec0) ? operand1_dec0_value : operand1_dec1_value;
+            ix_ip1_operand2 <= (ix_issue_ip1_dec0) ? operand2_dec0_value : operand2_dec1_value;
+            ix_ip1_wb_en <= (ix_issue_ip1_dec0) ? dec0_ix_wb_en : dec1_ix_wb_en;
+            ix_ip1_dst <= (ix_issue_ip1_dec0) ? dec0_ix_rd : dec1_ix_rd;
+            ix_ip1_pc <= (ix_issue_ip1_dec0) ? dec0_ix_pc : dec1_ix_pc;
             ix_ip1_valid <= 1'b1;
         end
         else if (ix_ip1_ready || pipe_flush) begin

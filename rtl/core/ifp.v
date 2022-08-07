@@ -365,6 +365,79 @@ module ifp(
 
     `endif
 
+
+    // Return Address Stack
+    reg [31:2] ras [0:`RAS_DEPTH-1];
+    reg [`RAS_DEPTH_BITS-1:0] ras_ptr_actual;
+    reg [`RAS_DEPTH_BITS-1:0] ras_ptr_speculative;
+    wire [`RAS_DEPTH_BITS-1:0] ras_ptr_actual_next =
+            (ip_if_branch_is_call) ? (ras_ptr_actual + 1) :
+            (ip_if_branch_is_ret) ? (ras_ptr_actual - 1) : (ras_ptr_actual);
+    reg [`RAS_DEPTH_BITS:0] ras_level_actual;
+    reg [`RAS_DEPTH_BITS:0] ras_level_speculative;
+    wire [`RAS_DEPTH_BITS:0] ras_level_actual_next =
+            (ip_if_branch_is_call) ? (
+                (ras_level_actual != `RAS_DEPTH) ?
+                (ras_level_actual + 1) : (ras_level_actual)) :
+            (ip_if_branch_is_ret) ? (
+                (ras_level_actual != 0) ?
+                (ras_level_actual - 1) : (ras_level_actual)) :
+            (ras_level_actual);
+    always @(posedge clk) begin
+        if (ip_if_branch) begin
+            ras_ptr_actual <= ras_ptr_actual_next;
+            ras_level_actual <= ras_level_actual_next;
+        end
+
+        if (ip_if_branch && if_pc_override) begin
+            // RAS mispredict, correct back to actual
+            ras_ptr_speculative <= ras_ptr_actual_next;
+            if (ip_if_branch_is_call)
+                ras[ras_ptr_actual + 1] <= ip_if_branch_pc[31:2] + 1;
+            ras_level_speculative <= ras_level_actual_next;
+        end
+        else if (bu_active && !ifp_pc_override) begin
+            if (insn0_is_call && f2_dec0_valid) begin
+                ras[ras_ptr_speculative + 1] <= f2_pc_aligned_plus_4[31:2];
+                ras_ptr_speculative <= ras_ptr_speculative + 1;
+                if (ras_level_speculative != `RAS_DEPTH)
+                    ras_level_speculative <= ras_level_speculative + 1;
+                else
+                    $display("RAS overflow");
+            end
+            else if (insn0_is_ret && f2_dec0_valid) begin
+                ras_ptr_speculative <= ras_ptr_speculative - 1;
+                if (ras_level_speculative != 0)
+                    ras_level_speculative <= ras_level_speculative - 1;
+            end
+            else if (insn1_is_call && f2_dec1_valid) begin
+                ras[ras_ptr_speculative + 1] <= aligned_pc_plus_8[31:2];
+                ras_ptr_speculative <= ras_ptr_speculative + 1;
+                if (ras_level_speculative != `RAS_DEPTH)
+                    ras_level_speculative <= ras_level_speculative + 1;
+                else
+                    $display("RAS overflow");
+            end
+            else if (insn1_is_ret && f2_dec1_valid) begin
+                ras_ptr_speculative <= ras_ptr_speculative - 1;
+                if (ras_level_speculative != 0)
+                    ras_level_speculative <= ras_level_speculative - 1;
+            end
+        end
+
+        if (rst) begin
+            ras_ptr_actual <= 0;
+            ras_ptr_speculative <= 0;
+            ras_level_actual <= 0;
+            ras_level_speculative <= 0;
+        end
+    end
+
+    wire ras_hit_lo = insn0_is_ret_buf && f2_dec0_valid && (ras_level_speculative != 0);
+    wire ras_hit_hi = insn1_is_ret_buf && f2_dec1_valid && (ras_level_speculative != 0);
+
+    wire [63:0] ras_result = {32'b0, ras[ras_ptr_speculative], 2'b0};
+
     wire [63:0] btb_result_lo = {32'b0, btb_rd_lo[29:0], 2'b0};
     wire [63:0] btb_result_hi = {32'b0, btb_rd_hi[29:0], 2'b0};
     wire btb_hit_lo = btb_rd_lo[55] && (btb_rd_lo[54:30] == f1_f2_pc[31:7]) &&
@@ -373,14 +446,17 @@ module ifp(
             !btb_init_active;
 
     // Branch if BTB hit and BP says taken 
-    wire f1_bp_lo = (bp_result_lo == `BP_TAKEN) && (btb_hit_lo) && insn0_is_branch && !f1_f2_pc[2];
-    wire f1_bp_hi = (bp_result_hi == `BP_TAKEN) && (btb_hit_hi) && insn1_is_branch;
+    wire f1_bp_lo = (bp_result_lo == `BP_TAKEN) && (btb_hit_lo) && !f1_f2_pc[2];
+    wire f1_bp_hi = (bp_result_hi == `BP_TAKEN) && (btb_hit_hi);
     wire f1_bp = insn_both_branch ? f1_bp_lo : (f1_bp_hi || f1_bp_lo);
 
     /*always @(posedge clk) begin
         if (bu_active) begin
             if (ifp_pc_override) begin
                 //
+            end
+            else if (ras_hit_lo) begin
+                $display("PC %08x RAS hit, next PC %08x", f2_pc_aligned, ras_result);
             end
             else if (f1_bp_lo && f2_dec0_valid) begin
                 $display("PC %08x predict branch taken, next PC %08x (%d, %b)",
@@ -389,6 +465,9 @@ module ifp(
             else if (insn_both_branch) begin
                 $display("PC %08x both instruction are branches and first NT, restarting at %08x (%d ,%b)",
                 f2_pc_aligned, f2_pc_aligned_plus_4, bp_counter_lo, bp_track_lo);
+            end
+            else if (ras_hit_hi) begin
+                $display("PC %08x RAS hit, next PC %08x", f2_pc_aligned_plus_4, ras_result);
             end
             else if (f1_bp_hi && f2_dec1_valid) begin
                 $display("PC %08x predict branch taken, next PC %08x (%d, %b)",
@@ -416,9 +495,11 @@ module ifp(
     wire [63:0] aligned_pc_plus_8 = {f1_f2_pc[63:3], 3'b0} + 8;
     assign next_pc =
             (ifp_pc_override) ? (ifp_new_pc) : // mis-predict
+            (ras_hit_lo) ? (ras_result) :
             (f1_bp_lo) ? (btb_result_lo) :
             // If both are branch, and valid (PC aligned to 8, insn0 valid)
             (insn_both_branch) ? (f2_pc_aligned_plus_4) :
+            (ras_hit_hi) ? (ras_result) :
             (f1_bp_hi) ? (btb_result_hi) :
             (aligned_pc_plus_8); // PC incr
 
@@ -450,13 +531,13 @@ module ifp(
     wire [1:0] f2_dec1_bp_track = bp_track_hi;
     wire [63:0] f2_dec1_bt = next_pc;
     // Higher instruction is valid if lower branch NT and not both are branch
-    wire f2_dec1_valid = !f1_bp_lo && !insn_both_branch;
+    wire f2_dec1_valid = !f1_bp_lo && !ras_hit_lo && !insn_both_branch;
 
     wire [63:0] f2_dec0_pc = f2_pc_aligned;
     wire [31:0] f2_dec0_instr = im_resp_rdata[31:0];
     wire f2_dec0_bp = f1_bp_lo;
     wire [1:0] f2_dec0_bp_track = bp_track_lo;
-    wire [63:0] f2_dec0_bt = (f1_bp_lo) ? (next_pc) : (f2_pc_aligned_plus_4);
+    wire [63:0] f2_dec0_bt = (ras_hit_lo || f1_bp_lo) ? (next_pc) : (f2_pc_aligned_plus_4);
     wire f2_dec0_valid = !f1_f2_pc[2]; // Low instruction is valid only if aligned
 
     wire insn1_is_bcond = f2_dec1_instr[6:0] == `OP_BRANCH;
@@ -473,7 +554,23 @@ module ifp(
     wire insn0_is_call = f2_dec0_instr[11:0] == 12'h0ef; // jal ra, xx or jalr ra, xx
     wire insn0_is_ret = f2_dec0_instr == 32'h00008067; // jalr zero, ra
 
-    wire insn_both_branch = insn0_is_branch && insn1_is_branch && !f1_f2_pc[2];
+    // Need to buffer insn_is_ret in case the memory takes more cycle to response
+    // next request
+    wire insn0_is_ret_buf, insn0_is_branch_buf, insn1_is_ret_buf, insn1_is_branch_buf;
+    fifo_1d_fwft #(.WIDTH(4)) if_insn_type_buffer(
+        .clk(clk),
+        .rst(rst),
+        .a_data({insn0_is_ret, insn0_is_branch, insn1_is_ret, insn1_is_branch}),
+        .a_valid(im_resp_valid),
+        /* verilator lint_off PINCONNECTEMPTY */
+        .a_ready(),
+        /* verilator lint_on PINCONNECTEMPTY */
+        .b_data({insn0_is_ret_buf, insn0_is_branch_buf, insn1_is_ret_buf, insn1_is_branch_buf}),
+        .b_valid(),
+        .b_ready(im_req_ready)
+    );
+
+    wire insn_both_branch = insn0_is_branch_buf && insn1_is_branch_buf && !f1_f2_pc[2];
 
     wire fifo_valid;
     wire if_dec1_valid_fifo;

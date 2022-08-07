@@ -52,6 +52,7 @@ module ip(
     input  wire [1:0]   ix_ip_bp_track,
     input  wire [63:0]  ix_ip_bt,
     /* verilator lint_on UNUSED */
+    input  wire         ix_ip_speculate,
     input  wire         ix_ip_valid,
     output wire         ix_ip_ready,
     // Forwarding path back to issue
@@ -62,7 +63,7 @@ module ip(
     output reg  [63:0]  ip_wb_pc,
     output reg          ip_wb_wb_en,
     output wire         ip_wb_hipri,
-    output reg          ip_wb_valid,
+    output wire         ip_wb_valid,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
     /* verilator lint_off UNDRIVEN */
@@ -164,26 +165,31 @@ module ip(
 
     assign ix_ip_ready = ip_wb_ready;
 
+    reg wb_valid;
     always @(posedge clk) begin
         if (ix_ip_ready) begin
-            ip_wb_valid <= ix_ip_valid && !ip_if_pc_override && !ip_abort;
+            wb_valid <= ix_ip_valid && !ip_if_pc_override && !ip_abort;
         end
-        else if (ip_wb_ready && ip_wb_valid) begin
-            ip_wb_valid <= 1'b0;
+        else if (ip_wb_ready && wb_valid) begin
+            wb_valid <= 1'b0;
         end
 
         if (rst) begin
-            ip_wb_valid <= 1'b0;
+            wb_valid <= 1'b0;
         end
     end
 
+    reg ip_wb_speculate;
     always @(posedge clk) begin
         if (ix_ip_ready) begin
             ip_wb_dst <= ix_ip_dst;
             ip_wb_result <= wb_result;
             ip_wb_pc <= ix_ip_pc;
             ip_wb_wb_en <= ix_ip_wb_en;
+            ip_wb_speculate <= ix_ip_speculate;
         end
     end
+
+    assign ip_wb_valid = wb_valid && !(ip_wb_speculate && ip_abort);
 
 endmodule

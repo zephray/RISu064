@@ -227,6 +227,7 @@ module cpu(
     wire        ix_ip1_truncate;
     wire [63:0] ix_ip1_operand1;
     wire [63:0] ix_ip1_operand2;
+    wire        ix_ip1_speculate;
     wire        ix_ip1_valid;
     wire        ix_ip1_ready;
     wire [63:0] ip0_ix_forwarding;
@@ -266,6 +267,7 @@ module cpu(
     wire [63:0] ix_md_operand2;
     wire [2:0]  ix_md_md_op;
     wire        ix_md_muldiv;
+    wire        ix_md_speculate;
     wire        ix_md_valid;
     wire        ix_md_ready;
     wire [4:0]  md_ix_dst;
@@ -341,6 +343,7 @@ module cpu(
         .ix_ip1_truncate(ix_ip1_truncate),
         .ix_ip1_operand1(ix_ip1_operand1),
         .ix_ip1_operand2(ix_ip1_operand2),
+        .ix_ip1_speculate(ix_ip1_speculate),
         .ix_ip1_valid(ix_ip1_valid),
         .ix_ip1_ready(ix_ip1_ready),
         // Hazard detection & Bypassing
@@ -435,6 +438,7 @@ module cpu(
         .ix_ip_bp(ix_ip0_bp),
         .ix_ip_bp_track(ix_ip0_bp_track),
         .ix_ip_bt(ix_ip0_bt),
+        .ix_ip_speculate(1'b0),
         .ix_ip_valid(ix_ip0_valid),
         .ix_ip_ready(ix_ip0_ready),
         // Forwarding path back to issue
@@ -475,6 +479,7 @@ module cpu(
         .ix_ip_truncate(ix_ip1_truncate),
         .ix_ip_operand1(ix_ip1_operand1),
         .ix_ip_operand2(ix_ip1_operand2),
+        .ix_ip_speculate(ix_ip1_speculate),
         .ix_ip_valid(ix_ip1_valid),
         .ix_ip_ready(ix_ip1_ready),
         // Forwarding path back to issue
@@ -591,6 +596,7 @@ module cpu(
         .ix_md_operand2(ix_md_operand2),
         .ix_md_md_op(ix_md_md_op),
         .ix_md_muldiv(ix_md_muldiv),
+        .ix_md_speculate(ix_md_speculate),
         .ix_md_valid(ix_md_valid),
         .ix_md_ready(ix_md_ready),
         // Hazard detection

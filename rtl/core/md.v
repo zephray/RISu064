@@ -34,6 +34,7 @@ module md(
     input  wire [63:0]  ix_md_operand2,
     input  wire [2:0]   ix_md_md_op,
     input  wire         ix_md_muldiv,
+    input  wire         ix_md_speculate,
     input  wire         ix_md_valid,
     output wire         ix_md_ready,
     // Hazard detection
@@ -109,7 +110,8 @@ module md(
         if (!active) begin
             if (ix_md_valid && ix_md_ready && !md_abort) begin
                 active <= 1'b1;
-                abort_valid <= 1'b1;
+                // Only speculated instructions can be cancelled
+                abort_valid <= ix_md_speculate;
                 active_unit <= req_unit;
                 pc <= ix_md_pc;
                 dst <= ix_md_dst;

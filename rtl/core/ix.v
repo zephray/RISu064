@@ -80,6 +80,7 @@ module ix(
     output reg          ix_ip1_truncate,
     output reg  [63:0]  ix_ip1_operand1,
     output reg  [63:0]  ix_ip1_operand2,
+    output reg          ix_ip1_speculate,
     output reg          ix_ip1_valid,
     input  wire         ix_ip1_ready,
     // Hazard detection & Bypassing
@@ -119,6 +120,7 @@ module ix(
     output reg  [63:0]  ix_md_operand2,
     output reg  [2:0]   ix_md_md_op,
     output reg          ix_md_muldiv,
+    output reg          ix_md_speculate,
     output reg          ix_md_valid,
     input  wire         ix_md_ready,
     // Hazard detection
@@ -492,8 +494,8 @@ module ix(
     wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
     wire ix_dec0_opr_ready = operand1_dec0_ready && operand2_dec0_ready;
     wire ix_dec1_opr_ready = operand1_dec1_ready && operand2_dec1_ready;
-    wire lsp_req_pending = ix_lsp_valid && !ix_lsp_ready;
-    wire md_req_pending = ix_md_valid && !ix_md_ready;
+    wire lsp_req_pending = ix_lsp_valid;
+    wire md_req_pending = ix_md_valid;
     wire ix_issue_common = !pipe_flush && !trap_ongoing && !int_pending &&
             !exc_pending;
     wire dec0_is_int = (dec0_ix_op_type == `OT_INT);
@@ -516,7 +518,7 @@ module ix(
             (!dec0_ix_wb_en || (
                 ((dec0_ix_rd != dec1_ix_rs1) || (dec1_ix_operand1 != `D_OPR1_RS1)) &&
                 ((dec0_ix_rd != dec1_ix_rs2) || (dec1_ix_operand2 != `D_OPR2_RS2)))) &&
-            (!dec0_is_branch);
+            (!dec0_is_branch || dec1_is_int || dec1_is_md);
     // Issue logic
 
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
@@ -690,6 +692,7 @@ module ix(
             ix_ip1_wb_en <= (ix_issue_ip1_dec0) ? dec0_ix_wb_en : dec1_ix_wb_en;
             ix_ip1_dst <= (ix_issue_ip1_dec0) ? dec0_ix_rd : dec1_ix_rd;
             ix_ip1_pc <= (ix_issue_ip1_dec0) ? dec0_ix_pc : dec1_ix_pc;
+            ix_ip1_speculate <= (ix_issue_ip1_dec1 && dec0_is_branch && dec0_ix_valid);
             ix_ip1_valid <= 1'b1;
         end
         else if (ix_ip1_ready || pipe_flush) begin
@@ -716,6 +719,7 @@ module ix(
             ix_md_operand2 <= (ix_issue_md_dec0) ? operand2_dec0_value : operand2_dec1_value;
             ix_md_md_op <= (ix_issue_md_dec0) ? dec0_ix_md_op : dec1_ix_md_op;
             ix_md_muldiv <= (ix_issue_md_dec0) ? dec0_ix_muldiv : dec1_ix_muldiv;
+            ix_ip1_speculate <= (ix_issue_md_dec1 && dec0_is_branch && dec0_ix_valid);
             ix_md_valid <= 1'b1;
         end
         else if (ix_md_ready || pipe_flush) begin

@@ -9,9 +9,9 @@ RISu64 (Reduced Instruction Set μProcessor 64 / Squirrel 64) is my toy 64-bit R
 - RV64IMZicsr_Zifencei
 - 7-stage pipeline: PCGen(F1), IMem(F2), Decode(ID), Issue(IX), Execute(EX), DMem(MEM), Writeback(WB).
 - In-order issue and out-of-order writeback
-- Single issue for now
+- Dual-issue
 - BTB + Bimodal/Gselect/Gshare/Tournament + RAS branch predictors
-- 1x Integer (arithmetic, barrel shifter, branch)
+- 2x Integer (arithmetic, barrel shifter, branch)
 - 1x Load store unit (aligned access only, unaligned access generate precise exception)
 - 1x Multiply/ divide unit (non-pipelined, 3/6-cycle 32/64bit multiply, 34/66-cycle 64bit divide)
 - Optional L1 instruction and data cache (2-way set associative blocking cache)
@@ -22,12 +22,17 @@ RISu64 (Reduced Instruction Set μProcessor 64 / Squirrel 64) is my toy 64-bit R
 
 The performance varies based on configurations:
 
-- 7-stage + 512-entry Bimodal + 32-entry BTB + TCM: **2.93 Coremark/MHz**
-- 7-stage + 4K-entry Tournament + 32-entry BTB + TCM: **2.97 Coremark/MHz**
-- 7-stage + 4K-entry Tournament + 32-entry BTB + 16KB I/D cache: **2.94 Coremark/MHz**
-- 7-stage + 16K-entry Tournament + 1K-entry BTB + TCM: **3.08 Coremark/MHz**
+- Single-issue + 512-entry Bimodal + 32-entry BTB + TCM: 3.01 Coremark/MHz
+- Single-issue + 4K-entry Tournament + 32-entry BTB + TCM: 3.06 Coremark/MHz
+- Single-issue + 4K-entry Tournament + 32-entry BTB + 16KB L1$: 3.01 Coremark/MHz
+- Dual-issue + 4K-entry Tournament + 32-entry BTB + TCM: 4.31 Coremark/MHz
 
-The core currently only track up to 2 in-flight load/ store without stalling the core, due to the lack of a proper load-store queue and the lack of a scalable dependency check mechanism. This may change in the future.
+Note:
+
+1. Compiled with GCC 9.2.0, with the following options: ```-MD -O3 -mabi=lp64 -march=rv64im -mcmodel=medany -ffreestanding -nostdlib -fomit-frame-pointer -funroll-all-loops -finline-limit=1000 -ftree-dominator-opts -fno-if-conversion2 -fselective-scheduling -fno-code-hoisting -freorder-blocks-and-partition```
+2. Single-issue is no longer supported in the latest branch, testing was carried out using commit ```efd0d3```
+3. L1-cache is organized as 2-way set associative, 16KB each, with simulated unlimited L2 memory and 15-cycle latency
+4. Each BPU entry is 2-bit, internally it expects 8-bit wide memory interface. 4K-entry = 1K x 8bit SRAM
 
 ## Status
 
@@ -37,7 +42,6 @@ Here is just a random list of things I want to / is working on that may or may n
 
 - Compressed instruction support
 - FPU support
-- Dual-issue
 - FGMT/ SMT
 - Non-blocking L2 cache
 - SMP and cache-coherency

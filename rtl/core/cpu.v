@@ -383,6 +383,7 @@ module cpu(
         .ix_md_operand2(ix_md_operand2),
         .ix_md_md_op(ix_md_md_op),
         .ix_md_muldiv(ix_md_muldiv),
+        .ix_md_speculate(ix_md_speculate),
         .ix_md_valid(ix_md_valid),
         .ix_md_ready(ix_md_ready),
         // Hazard detection

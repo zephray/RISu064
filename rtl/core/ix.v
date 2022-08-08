@@ -719,7 +719,7 @@ module ix(
             ix_md_operand2 <= (ix_issue_md_dec0) ? operand2_dec0_value : operand2_dec1_value;
             ix_md_md_op <= (ix_issue_md_dec0) ? dec0_ix_md_op : dec1_ix_md_op;
             ix_md_muldiv <= (ix_issue_md_dec0) ? dec0_ix_muldiv : dec1_ix_muldiv;
-            ix_ip1_speculate <= (ix_issue_md_dec1 && dec0_is_branch && dec0_ix_valid);
+            ix_md_speculate <= (ix_issue_md_dec1 && dec0_is_branch && dec0_ix_valid);
             ix_md_valid <= 1'b1;
         end
         else if (ix_md_ready || pipe_flush) begin

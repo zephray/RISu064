@@ -270,6 +270,7 @@ module wb(
             (wb1_src == WB_SRC_IP1) ? ip1_wb_pc : 64'bx;
     always @(posedge clk) begin
         begin
+            $display("TIME: %0t", $time);
             if (wb0_active) begin
                 $display("PC %016x WB [%d] <- %016x", wb0_pc, wb0_dst, wb0_value);
             end

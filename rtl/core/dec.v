@@ -81,7 +81,7 @@ module dec(
 
     // TODO: IFQ in IF stage could probably be removed entirely, favoring
     // this decoded instruction queue
-    fifo_2w2r #(.WIDTH(248), .ABITS(2)) iq (
+    fifo_2w2r #(.WIDTH(248), .ABITS(3), .DEPTH(6)) iq (
         .clk(clk),
         .rst(rst || pipe_flush),
         .a1_data(dec1_bundle),

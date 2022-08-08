@@ -39,6 +39,8 @@
 #include "klmemsim.h"
 #include "earliercon.h"
 
+#define CLK_PERIOD_PS 10000
+
 #define RAM_BASE 0x80000000
 #define RAM_SIZE 1*1024*1024
 
@@ -85,6 +87,11 @@ Earliercon *earliercon;
 #elif (defined(TEST_RISU))
 #define SIGNAL(x) CONCAT(core->rootp->risu__DOT__cpu__DOT__,x)
 #endif
+
+double sc_time_stamp() {
+    // This is in pS. Currently we use a 10ns (100MHz) clock signal.
+    return (double)tickcount * (double)CLK_PERIOD_PS;
+}
 
 void tick() {
     // Software simulated parts should read the signal
@@ -204,22 +211,18 @@ void tick() {
             }
         }
 
-        if (SIGNAL(ip_if_pc_override)) {
-            mispredict_count++;
-        }
-
         if (SIGNAL(if_pc_override)) {
             pc_override_count++;
         }
     }
 
     if (enable_trace)
-        trace->dump(tickcount * 10000);
+        trace->dump(tickcount * CLK_PERIOD_PS);
     core->clk = 0;
     
     core->eval();
     if (enable_trace)
-        trace->dump(tickcount * 10000 + 5000);
+        trace->dump(tickcount * CLK_PERIOD_PS + CLK_PERIOD_PS / 2);
 
     tickcount++;
 }
@@ -398,8 +401,10 @@ int main(int argc, char *argv[]) {
         printf("Retired %lu instructions in %lu cycles. Average IPC: %.1f\n",
                 instret, cycle, (float)instret / (float)cycle);
         
-        uint64_t predicted = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_bp_correct);
-        uint64_t btb_miss_on_predict = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_btb_miss);
+        uint64_t predicted = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_bp_correct) +
+                SIGNAL(ip1__DOT__ip_branch_support__DOT__dbg_bp_correct);;
+        uint64_t btb_miss_on_predict = SIGNAL(ip0__DOT__ip_branch_support__DOT__dbg_btb_miss) +
+                SIGNAL(ip1__DOT__ip_branch_support__DOT__dbg_btb_miss);
 
         /*printf("Total stall/ bubbles: %lu\n", cycle - instret);
         printf("Stall frontend stall: %lu\n", if_nr_count);
@@ -412,17 +417,28 @@ int main(int argc, char *argv[]) {
         printf("Stall due to multiply/ divide unit busy: %lu\n", stall_md);
         printf("Stall due to WAW on integer EU: %lu\n", SIGNAL(ix__DOT__dbg_stl_ip0waw_cntr));
         printf("Stall due to WAW on load store: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
-        printf("Stall due to WAW on multiply: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));
-        printf("Stall due to branching: %lu\n", mispredict_count * 4);*/
+        printf("Stall due to WAW on multiply: %lu\n", SIGNAL(ix__DOT__dbg_stl_lspwaw_cntr));*/
+        printf("Total frontend stall: %lu\n", SIGNAL(ix__DOT__dbg_cntr_fe_stall));
+        printf("Frontend stall minus branching: %lu\n", SIGNAL(ix__DOT__dbg_cntr_fe_stall) - pc_override_count * 2);
+        printf("Total cycles no issue at all: %lu\n", SIGNAL(ix__DOT__dbg_cntr_no_issue));
+        printf("Total cycles issue 1 instruction: %lu\n", SIGNAL(ix__DOT__dbg_cntr_one_issue));
+        printf("Total cycles issue 2 instructions: %lu\n", SIGNAL(ix__DOT__dbg_cntr_dual_issue));
+        printf("Dual-issue dependency check fail: %lu\n", SIGNAL(ix__DOT__dbg_cntr_dep_fail));
+        printf("Dual-issue RAW dependency: %lu\n", SIGNAL(ix__DOT__dbg_cntr_dep_raw));
+        printf("Dual-issue WAW dependency: %lu\n", SIGNAL(ix__DOT__dbg_cntr_dep_waw));
+        printf("Unsupported branch and load store issue: %lu\n", SIGNAL(ix__DOT__dbg_cntr_str_brls));
+        printf("Unsupported branch and branch issue: %lu\n", SIGNAL(ix__DOT__dbg_cntr_str_brbr));
+        printf("Unsupported branch and other issue: %lu\n", SIGNAL(ix__DOT__dbg_cntr_str_brother));
+
+        printf("Stall due to branching: %lu\n", pc_override_count * 4);
         printf("Total branches: %lu\n", branch_count);
         if (branch_count != 0) {
             printf("Taken branches: %lu (%ld%%)\n", taken_count, taken_count * 100 / branch_count);
             printf("Branch predictor correct: %lu (%ld%%)\n", predicted, predicted * 100 / branch_count);
             printf("BTB miss on predicted branches: %lu (%ld%%)\n", btb_miss_on_predict, btb_miss_on_predict * 100 / predicted);
-            printf("Combined mistaken branches: %lu (Correct %ld%%)\n", mispredict_count,
-                    100 - mispredict_count * 100 / branch_count);
+            printf("Combined mistaken branches: %lu (Correct %ld%%)\n", pc_override_count,
+                    100 - pc_override_count * 100 / branch_count);
         }
-        printf("Remaining unhandled branches: %lu\n", pc_override_count - mispredict_count);
     }
 
     int retval;

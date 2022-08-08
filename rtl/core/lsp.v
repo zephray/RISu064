@@ -47,6 +47,7 @@ module lsp(
     input  wire [63:0]  ix_lsp_source,
     input  wire         ix_lsp_mem_sign,
     input  wire [1:0]   ix_lsp_mem_width,
+    input  wire         ix_lsp_speculate,
     input  wire         ix_lsp_valid,
     output wire         ix_lsp_ready,
     // To issue for hazard detection
@@ -82,6 +83,8 @@ module lsp(
     reg [2:0] ag_m_byte_offset;
     reg ag_m_mem_sign;
     reg [1:0] ag_m_mem_width;
+    reg ag_m_speculate;
+    reg m_abort;
 
     // Mask and data generation
     wire handshaking = ix_lsp_valid && ix_lsp_ready;
@@ -123,10 +126,20 @@ module lsp(
             lsp_wb_pc <= ag_m_pc;
             lsp_wb_dst <= ag_m_dst;
             lsp_wb_wb_en <= ag_m_wb_en;
-            lsp_wb_valid <= dm_resp_valid;
+            lsp_wb_valid <= dm_resp_valid &&
+                    (!m_abort && !(ag_m_speculate && ag_abort));
+            m_abort <= 1'b0;
         end
-        if (dm_resp_valid && dm_resp_valid)
+
+        // It should only stay high for one cycle
+        ag_m_speculate <= 1'b0;
+        if (ag_m_speculate && ag_abort)
+            m_abort <= 1'b1;
+
+        if (dm_resp_valid && dm_resp_valid) begin
+            m_abort <= 1'b0;
             lsp_ix_mem_busy <= 1'b0;
+        end
 
         // AG stage
         if (handshaking) begin
@@ -136,6 +149,7 @@ module lsp(
             ag_m_byte_offset <= agu_addr[2:0];
             ag_m_mem_sign <= ix_lsp_mem_sign;
             ag_m_mem_width <= ix_lsp_mem_width;
+            ag_m_speculate <= ix_lsp_speculate;
             lsp_unaligned_load <= !ag_abort && ualign && !ix_lsp_wb_en;
             lsp_unaligned_store <= !ag_abort && ualign && ix_lsp_wb_en;
             lsp_ix_mem_busy <= !ag_abort && !ualign;
@@ -207,6 +221,7 @@ module lsp(
     assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
     assign lsp_ix_mem_dst = ag_m_dst;
     assign lsp_ix_mem_result = m_wb_result;
-    assign lsp_ix_mem_result_valid = dm_resp_valid;
+    assign lsp_ix_mem_result_valid = dm_resp_valid &&
+            (!m_abort && !(ag_m_speculate && ag_abort));
 
 endmodule

@@ -217,10 +217,12 @@ module ifp(
             {branch_history_w[`BHT_ABITS-2:0], 1'b0} ^ ip_if_branch_pc[`BHT_ABITS+1:2];
     wire [`BHT_ABITS-1:0] bp_gsh_index =
             {branch_history_r[`BHT_ABITS-2:0], 1'b0} ^ next_pc[`BHT_ABITS+1:2];
+    `ifdef BPU_GLOBAL_GSELECT
     wire [`BHT_ABITS-1:0] bp_gsl_update_index =
             {branch_history_w, ip_if_branch_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
     wire [`BHT_ABITS-1:0] bp_gsl_index =
             {branch_history_r, next_pc[`BHT_ABITS+1-`BPU_GHR_WIDTH:2]};
+    `endif
     `endif
     wire [`BHT_ABITS-1:0] bp_bm_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
     wire [`BHT_ABITS-1:0] bp_bm_index = next_pc[`BHT_ABITS+1:2];

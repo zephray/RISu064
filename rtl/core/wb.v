@@ -51,6 +51,7 @@ module wb(
     input  wire [63:0]  ip1_wb_pc,
     /* verilator lint_on UNUSED */
     input  wire         ip1_wb_wb_en,
+    input  wire         ip1_wb_hipri,
     input  wire         ip1_wb_valid,
     output wire         ip1_wb_ready,
     // From load-store pipe
@@ -101,7 +102,7 @@ module wb(
     wire trap_wb_req = trap_wb_valid && trap_wb_wb_en;
     // Retire without writeback
     wire ip0_rwowb_req = ip0_wb_valid && !ip0_wb_wb_en;
-    // IP1 won't retire without writeback
+    wire ip1_rwowb_req = ip1_wb_valid && !ip1_wb_wb_en;
     wire lsp_rwowb_req = lsp_wb_valid && !lsp_wb_wb_en;
     wire trap_rwowb_req = trap_wb_valid && !trap_wb_wb_en;
     // Always prefer accepting memory request for now
@@ -132,9 +133,14 @@ module wb(
         trap_wb_ac = 1'b0;
         wb0_src = WB_SRC_NONE;
         wb1_src = WB_SRC_NONE;
+        // Currently two IPs shouldn't issue hipri in the same cycle
         if (ip0_wb_req && ip0_wb_hipri) begin
             wb0_src = WB_SRC_IP0;
             ip0_wb_ac = 1'b1;
+        end
+        else if (ip1_wb_req && ip1_wb_hipri) begin
+            wb0_src = WB_SRC_IP1;
+            ip1_wb_ac = 1'b1;
         end
         if (wb_buf_valid) begin
             wb1_src = WB_SRC_BUF;
@@ -170,7 +176,7 @@ module wb(
                 ip0_wb_ac = 1'b1;
             end
         end
-        if (ip1_wb_req) begin
+        if (ip1_wb_req && !ip1_wb_hipri) begin
             if (wb0_src == WB_SRC_NONE) begin
                 wb0_src = WB_SRC_IP1;
                 ip1_wb_ac = 1'b1;
@@ -209,7 +215,9 @@ module wb(
             (wb0_src == WB_SRC_IP0) ? ip0_wb_result :
             (wb0_src == WB_SRC_IP1) ? ip1_wb_result : 64'bx;
 
-    wire wb1_active = wb1_src != WB_SRC_NONE;
+    wire wb1_active = (wb1_src != WB_SRC_NONE) &&
+            // WB1 has eariler value, if it's overwritten, drop it
+            ((wb1_src != WB_SRC_BUF) || (wb1_dst != wb0_dst));
     wire [4:0] wb1_dst =
             (wb1_src == WB_SRC_BUF) ? wb_buf_dst :
             (wb1_src == WB_SRC_LSP) ? lsp_wb_dst :
@@ -278,7 +286,10 @@ module wb(
                 $display("PC %016x WB [%d] <- %016x", wb1_pc, wb1_dst, wb1_value);
             end
             if (ip0_rwowb_req) begin
-                $display("PC %016x RETIRE FROM IP", ip0_wb_pc);
+                $display("PC %016x RETIRE FROM IP0", ip0_wb_pc);
+            end
+            if (ip1_rwowb_req) begin
+                $display("PC %016x RETIRE FROM IP1", ip0_wb_pc);
             end
             if (lsp_rwowb_req) begin
                 $display("PC %016x RETIRE FROM LSP", lsp_wb_pc);
@@ -300,7 +311,7 @@ module wb(
 
     // Acknowledge accepted wb, always acknowledge retire without writeback
     assign ip0_wb_ready = !(ip0_wb_valid && (!ip0_wb_ac && !ip0_rwowb_req && !wb_buf_src_ip0));
-    assign ip1_wb_ready = !(ip1_wb_valid && (!ip1_wb_ac && !wb_buf_src_ip1));
+    assign ip1_wb_ready = !(ip1_wb_valid && (!ip1_wb_ac && !ip1_rwowb_req && !wb_buf_src_ip1));
     assign lsp_wb_ready = !(lsp_wb_valid && (!lsp_wb_ac && !lsp_rwowb_req && !wb_buf_src_lsp));
     assign md_wb_ready = !(md_wb_valid && !md_wb_ac);
     assign trap_wb_ready = !(trap_wb_valid && (!trap_wb_ac && !trap_rwowb_req));

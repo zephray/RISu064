@@ -225,8 +225,17 @@ module cpu(
     wire [3:0]  ix_ip1_op;
     wire        ix_ip1_option;
     wire        ix_ip1_truncate;
+    wire [1:0]  ix_ip1_br_type;
+    wire        ix_ip1_br_neg;
+    wire [63:0] ix_ip1_br_base;
+    wire [20:0] ix_ip1_br_offset;
+    wire        ix_ip1_br_is_call;
+    wire        ix_ip1_br_is_ret;
     wire [63:0] ix_ip1_operand1;
     wire [63:0] ix_ip1_operand2;
+    wire        ix_ip1_bp;
+    wire [1:0]  ix_ip1_bp_track;
+    wire [63:0] ix_ip1_bt;
     wire        ix_ip1_speculate;
     wire        ix_ip1_valid;
     wire        ix_ip1_ready;
@@ -248,6 +257,7 @@ module cpu(
     wire [63:0] ix_lsp_source;
     wire        ix_lsp_mem_sign;
     wire [1:0]  ix_lsp_mem_width;
+    wire        ix_lsp_speculate;
     wire        ix_lsp_valid;
     wire        ix_lsp_ready;
     wire        lsp_ix_mem_busy;
@@ -341,8 +351,17 @@ module cpu(
         .ix_ip1_op(ix_ip1_op),
         .ix_ip1_option(ix_ip1_option),
         .ix_ip1_truncate(ix_ip1_truncate),
+        .ix_ip1_br_type(ix_ip1_br_type),
+        .ix_ip1_br_neg(ix_ip1_br_neg),
+        .ix_ip1_br_base(ix_ip1_br_base),
+        .ix_ip1_br_offset(ix_ip1_br_offset),
+        .ix_ip1_br_is_call(ix_ip1_br_is_call),
+        .ix_ip1_br_is_ret(ix_ip1_br_is_ret),
         .ix_ip1_operand1(ix_ip1_operand1),
         .ix_ip1_operand2(ix_ip1_operand2),
+        .ix_ip1_bp(ix_ip1_bp),
+        .ix_ip1_bp_track(ix_ip1_bp_track),
+        .ix_ip1_bt(ix_ip1_bt),
         .ix_ip1_speculate(ix_ip1_speculate),
         .ix_ip1_valid(ix_ip1_valid),
         .ix_ip1_ready(ix_ip1_ready),
@@ -361,6 +380,7 @@ module cpu(
         .ix_lsp_source(ix_lsp_source),
         .ix_lsp_mem_sign(ix_lsp_mem_sign),
         .ix_lsp_mem_width(ix_lsp_mem_width),
+        .ix_lsp_speculate(ix_lsp_speculate),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
         .lsp_unaligned_load(lsp_unaligned_load),
@@ -418,6 +438,14 @@ module cpu(
     wire [63:0] ip0_wb_pc;
     wire ip0_wb_ready;
     wire ip0_wb_hipri;
+    wire ip0_if_branch;
+    wire ip0_if_branch_taken;
+    wire [63:0] ip0_if_branch_pc;
+    wire ip0_if_branch_is_call;
+    wire ip0_if_branch_is_ret;
+    wire [1:0] ip0_if_branch_track;
+    wire ip0_if_pc_override;
+    wire [63:0] ip0_if_new_pc;
     ip #(.IP_HANDLE_BRANCH(1)) ip0(
         .clk(clk),
         .rst(rst),
@@ -453,22 +481,30 @@ module cpu(
         .ip_wb_valid(ip0_wb_valid),
         .ip_wb_ready(ip0_wb_ready),
         // To instruction fetch unit
-        .ip_if_branch(ip_if_branch),
-        .ip_if_branch_taken(ip_if_branch_taken),
-        .ip_if_branch_pc(ip_if_branch_pc),
-        .ip_if_branch_is_call(ip_if_branch_is_call),
-        .ip_if_branch_is_ret(ip_if_branch_is_ret),
-        .ip_if_branch_track(ip_if_branch_track),
-        .ip_if_pc_override(ip_if_pc_override),
-        .ip_if_new_pc(ip_if_new_pc),
+        .ip_if_branch(ip0_if_branch),
+        .ip_if_branch_taken(ip0_if_branch_taken),
+        .ip_if_branch_pc(ip0_if_branch_pc),
+        .ip_if_branch_is_call(ip0_if_branch_is_call),
+        .ip_if_branch_is_ret(ip0_if_branch_is_ret),
+        .ip_if_branch_track(ip0_if_branch_track),
+        .ip_if_pc_override(ip0_if_pc_override),
+        .ip_if_new_pc(ip0_if_new_pc),
         // Pipeline flush
-        .ip_abort(1'b0)
+        .ip_abort(pipe_flush)
     );
 
     wire [63:0] ip1_wb_pc;
     wire ip1_wb_ready;
-    /* verilator lint_off PINMISSING */
-    ip #(.IP_HANDLE_BRANCH(0)) ip1(
+    wire ip1_wb_hipri;
+    wire ip1_if_branch;
+    wire ip1_if_branch_taken;
+    wire [63:0] ip1_if_branch_pc;
+    wire ip1_if_branch_is_call;
+    wire ip1_if_branch_is_ret;
+    wire [1:0] ip1_if_branch_track;
+    wire ip1_if_pc_override;
+    wire [63:0] ip1_if_new_pc;
+    ip #(.IP_HANDLE_BRANCH(1)) ip1(
         .clk(clk),
         .rst(rst),
         // From issue
@@ -478,8 +514,17 @@ module cpu(
         .ix_ip_op(ix_ip1_op),
         .ix_ip_option(ix_ip1_option),
         .ix_ip_truncate(ix_ip1_truncate),
+        .ix_ip_br_type(ix_ip1_br_type),
+        .ix_ip_br_neg(ix_ip1_br_neg),
+        .ix_ip_br_base(ix_ip1_br_base),
+        .ix_ip_br_offset(ix_ip1_br_offset),
+        .ix_ip_br_is_call(ix_ip1_br_is_call),
+        .ix_ip_br_is_ret(ix_ip1_br_is_ret),
         .ix_ip_operand1(ix_ip1_operand1),
         .ix_ip_operand2(ix_ip1_operand2),
+        .ix_ip_bp(ix_ip1_bp),
+        .ix_ip_bp_track(ix_ip1_bp_track),
+        .ix_ip_bt(ix_ip1_bt),
         .ix_ip_speculate(ix_ip1_speculate),
         .ix_ip_valid(ix_ip1_valid),
         .ix_ip_ready(ix_ip1_ready),
@@ -490,12 +535,32 @@ module cpu(
         .ip_wb_result(ip1_wb_result),
         .ip_wb_pc(ip1_wb_pc),
         .ip_wb_wb_en(ip1_wb_wb_en),
+        .ip_wb_hipri(ip1_wb_hipri),
         .ip_wb_valid(ip1_wb_valid),
         .ip_wb_ready(ip1_wb_ready),
+        // To instruction fetch unit
+        .ip_if_branch(ip1_if_branch),
+        .ip_if_branch_taken(ip1_if_branch_taken),
+        .ip_if_branch_pc(ip1_if_branch_pc),
+        .ip_if_branch_is_call(ip1_if_branch_is_call),
+        .ip_if_branch_is_ret(ip1_if_branch_is_ret),
+        .ip_if_branch_track(ip1_if_branch_track),
+        .ip_if_pc_override(ip1_if_pc_override),
+        .ip_if_new_pc(ip1_if_new_pc),
         // Pipeline flush
         .ip_abort(pipe_flush)
     );
-    /* verilator lint_on PINMISSING */
+
+    assign ip_if_pc_override = ip0_if_pc_override || ip1_if_pc_override;
+    // Currently the pipeline only issue up to 1 branch instruction per cycle
+    // A simple mux is good enough.
+    assign ip_if_branch = ip0_if_branch || ip1_if_branch;
+    assign ip_if_new_pc = ip0_if_branch ? ip0_if_new_pc : ip1_if_new_pc;
+    assign ip_if_branch_taken =  ip0_if_branch ? (ip0_if_branch_taken) : (ip1_if_branch_taken);
+    assign ip_if_branch_pc = ip0_if_branch ? (ip0_if_branch_pc) : (ip1_if_branch_pc);
+    assign ip_if_branch_is_call =  ip0_if_branch ? (ip0_if_branch_is_call) : (ip1_if_branch_is_call);
+    assign ip_if_branch_is_ret =  ip0_if_branch ? (ip0_if_branch_is_ret) : (ip1_if_branch_is_ret);
+    assign ip_if_branch_track = ip0_if_branch ? (ip0_if_branch_track) : (ip1_if_branch_track);
 
     lsp lsp(
         .clk(clk),
@@ -518,6 +583,7 @@ module cpu(
         .ix_lsp_source(ix_lsp_source),
         .ix_lsp_mem_sign(ix_lsp_mem_sign),
         .ix_lsp_mem_width(ix_lsp_mem_width),
+        .ix_lsp_speculate(ix_lsp_speculate),
         .ix_lsp_valid(ix_lsp_valid),
         .ix_lsp_ready(ix_lsp_ready),
         // To issue for hazard detection
@@ -636,6 +702,7 @@ module cpu(
         .ip1_wb_result(ip1_wb_result),
         .ip1_wb_pc(ip1_wb_pc),
         .ip1_wb_wb_en(ip1_wb_wb_en),
+        .ip1_wb_hipri(ip1_wb_hipri),
         .ip1_wb_valid(ip1_wb_valid),
         .ip1_wb_ready(ip1_wb_ready),
         // From load-store pipe

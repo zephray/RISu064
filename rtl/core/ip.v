@@ -90,7 +90,7 @@ module ip(
 
     generate
     if (IP_HANDLE_BRANCH == 1) begin: ip_branch_support
-        wire br_valid = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE);
+        wire br_valid = (ix_ip_valid) && (ix_ip_br_type != `BT_NONE) && !ip_abort;
         wire [63:0] br_offset = {{43{ix_ip_br_offset[20]}}, ix_ip_br_offset};
         wire [63:0] br_taken_addr = (ix_ip_br_base + br_offset) & (~64'd1);
         wire br_take =

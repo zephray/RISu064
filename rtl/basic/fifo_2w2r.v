@@ -55,7 +55,8 @@ module fifo_2w2r (
 
     parameter WIDTH = 64;
     parameter ABITS = 2;
-    localparam DEPTH = (1 << ABITS);
+    parameter DEPTH = 4;
+    //localparam DEPTH = (1 << ABITS);
 
     reg [WIDTH-1:0] fifo [0:DEPTH-1];
     reg [ABITS:0] fifo_level;
@@ -86,12 +87,21 @@ module fifo_2w2r (
     wire [1:0] incoming_count = (a_both_active) ? 2 : (a_active) ? 1 : 0;
     wire [1:0] outgoing_count = (b_both_active) ? 2 : (b_active) ? 1 : 0;
 
+    wire [ABITS-1:0] wr_ptr_plus_2 = (wr_ptr + 2 >= DEPTH) ?
+            (wr_ptr + 2 - DEPTH) : (wr_ptr + 2);
+    wire [ABITS-1:0] wr_ptr_plus_1 = (wr_ptr + 1 >= DEPTH) ?
+            (wr_ptr + 1 - DEPTH) : (wr_ptr + 1);
+    wire [ABITS-1:0] rd_ptr_plus_2 = (rd_ptr + 2 >= DEPTH) ?
+            (rd_ptr + 2 - DEPTH) : (rd_ptr + 2);
+    wire [ABITS-1:0] rd_ptr_plus_1 = (rd_ptr + 1 >= DEPTH) ?
+            (rd_ptr + 1 - DEPTH) : (rd_ptr + 1);
+
     always @(posedge clk) begin
         // Data in
         if (a_active) begin
             if (a_both_active) begin
                 fifo[wr_ptr] <= a0_data[WIDTH-1:0];
-                fifo[wr_ptr+1] <= a1_data[WIDTH-1:0];
+                fifo[wr_ptr_plus_1] <= a1_data[WIDTH-1:0];
             end
             else if (a1_active) begin
                 fifo[wr_ptr] <= a1_data[WIDTH-1:0];
@@ -106,9 +116,9 @@ module fifo_2w2r (
 
         // Pointer update
         if (a_active)
-            wr_ptr <= (a_both_active) ? wr_ptr + 2 : wr_ptr + 1;
+            wr_ptr <= (a_both_active) ? wr_ptr_plus_2 : wr_ptr_plus_1;
         if (b_active)
-            rd_ptr <= (b_both_active) ? rd_ptr + 2 : rd_ptr + 1;
+            rd_ptr <= (b_both_active) ? rd_ptr_plus_2 : rd_ptr_plus_1;
         
         if (rst) begin
             wr_ptr <= 0;
@@ -119,7 +129,7 @@ module fifo_2w2r (
     assign b0_valid = !fifo_empty;
     assign b1_valid = !fifo_almost_empty;
     assign b0_data = fifo[rd_ptr];
-    assign b1_data = fifo[rd_ptr+1];
+    assign b1_data = fifo[rd_ptr_plus_1];
     assign a_ready = !fifo_full;
     assign a_almost_full = fifo_almost_full;
     assign a_full = fifo_full;

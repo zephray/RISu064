@@ -25,6 +25,7 @@
 `include "defines.vh"
 
 // Trap and CSR handling, generate interrupt and handles exception
+// Supervisior mode interrupt delegation is not supported (yet)
 module trap(
     input  wire         clk,
     input  wire         rst,
@@ -54,6 +55,9 @@ module trap(
     input  wire         trap_wb_ready,
     // From writeback, for counting
     input  wire [2:0]   wb_trap_instret, // Number of instructions retired
+    // To MMU
+    output wire [63:0]  trap_mmu_satp,
+    output wire [1:0]   trap_mmu_mpp,
     // To instruction fetch unit
     output reg          trap_if_pc_override,
     output reg  [63:0]  trap_if_new_pc
@@ -75,6 +79,21 @@ module trap(
     reg [63:0] mepc;
     reg mcause_intexc;
     reg [3:0] mcause_code;
+`ifdef ENABLE_MMU
+    reg [1:0] mpp;
+    reg [63:0] satp;
+
+    assign trap_mmu_satp = satp;
+    assign trap_mmu_mpp = mpp;
+
+    wire machine_csr_allowed = mpp == `MSTATUS_MPP_MACHINE;
+    wire supervisor_csr_allowed = mpp == `MSTATUS_MPP_SUPERVISOR || machine_csr_allowed;
+`else
+    assign trap_mmu_satp = 64'b0;
+    assign trap_mmu_mpp = `MSTATUS_MPP_MACHINE;
+    wire machine_csr_allowed = 1'b1;
+    wire supervisor_csr_allowed = 1'b0;
+`endif
 
     assign trap_ix_ip = gmie ? (mie & mip) : (16'b0);
 
@@ -85,7 +104,7 @@ module trap(
     wire [63:0] csr_wr =
             (csr_op == `CSR_RW) ? (csr_opr) :
             (csr_op == `CSR_RS) ? (trap_wb_result | csr_opr) :
-            (csr_op == `CSR_RC) ? (trap_wb_result & ~csr_opr) : 64'bx;
+            (csr_op == `CSR_RC) ? (trap_wb_result & ~csr_opr) : trap_wb_result;
 
     wire [63:0] trapvec_int = (mtvec[1:0] == `MTVEC_MODE_VECTORED) ?
             {mtvec[63:6], ix_trap_cause[3:0], 2'b0} : {mtvec[63:2], 2'b0};
@@ -167,7 +186,6 @@ module trap(
                     `CSR_MARCHID: trap_wb_result <= `MARCHID;
                     `CSR_MIMPID: trap_wb_result <= `MIMPID;
                     `CSR_MHARTID: trap_wb_result <= HARTID;
-                    `CSR_MSTATUS: trap_wb_result <= {56'd0, gmpie, 3'd0, gmie, 3'd0};
                     `CSR_MISA: trap_wb_result <= `MISA_VAL;
                     `CSR_MIE: trap_wb_result <= {48'b0, mie};
                     `CSR_MTVEC: trap_wb_result <= mtvec;
@@ -177,6 +195,12 @@ module trap(
                     `CSR_MIP: trap_wb_result <= {48'b0, mip};
                     `CSR_MCYCLE: trap_wb_result <= mcycle;
                     `CSR_MINSTRET: trap_wb_result <= minstret;
+                    `ifdef ENABLE_MMU
+                    `CSR_MSTATUS: trap_wb_result <= {51'b0, mpp, 3'd0, gmpie, 3'd0, gmie, 3'd0};
+                    `CSR_SATP: trap_wb_result <= satp;
+                    `else
+                    `CSR_MSTATUS: trap_wb_result <= {56'd0, gmpie, 3'd0, gmie, 3'd0};
+                    `endif
                     default: begin
                         // Invalid CSR read
                     `ifndef IGNORE_INVALID_CSR
@@ -193,6 +217,21 @@ module trap(
                     `endif
                     end
                     endcase
+                    if (((ix_trap_csr_id[9:8] == 2'b11) && !machine_csr_allowed) || 
+                            ((ix_trap_csr_id[9:8] == 2'b01) && !supervisor_csr_allowed) ||
+                            ((ix_trap_csr_id[11:10] == 2'b11) && (csr_op != `CSR_RD))) begin
+                        // Access CSR without appropriate priviledge level or
+                        // writing to read-only CSRs raise illegal instruction
+                        // exception.
+                        mcause_intexc <= `MCAUSE_EXCEPTION;
+                        mcause_code <= `MCAUSE_ILLEGALI;
+                        trap_if_pc_override <= 1'b1;
+                        trap_if_new_pc <= trapvec_exc;
+                        mepc <= ix_trap_pc;
+                        gmie <= 1'b0;
+                        gmpie <= gmie;
+                        state <= ST_IDLE;
+                    end
                     $display("CSR read %x = %d", ix_trap_csr_id, trap_wb_result);
                 end
             end
@@ -204,6 +243,9 @@ module trap(
             end
             case (csr_id)
             `CSR_MSTATUS: begin
+                `ifdef ENABLE_MMU
+                mpp <= csr_wr[`MSTATUS_MPP_MSB:`MSTATUS_MPP_LSB];
+                `endif
                 gmie <= csr_wr[`MSTATUS_MIE_BIT];
                 gmpie <= csr_wr[`MSTATUS_MPIE_BIT];
             end
@@ -218,6 +260,9 @@ module trap(
             `CSR_MIP: mip <= csr_wr[15:0] | extint_pending_overlay;
             `CSR_MCYCLE: mcycle <= csr_wr;
             `CSR_MINSTRET: minstret <= csr_wr;
+            `ifdef ENABLE_MMU
+            `CSR_SATP: satp <= csr_wr;
+            `endif
             default: begin end // Nothing to do by default
             endcase
         end
@@ -227,6 +272,10 @@ module trap(
             state <= ST_IDLE;
             gmie <= 1'b0;
             mie <= 16'd0;
+            `ifdef ENABLE_MMU
+            mpp <= `MSTATUS_MPP_MACHINE;
+            satp[63:60] <= 4'd0;
+            `endif
             // mcycle and minstret does not need reset
             // They could hold any value after reset
             // mip should be manually cleared before unmasking interrupt

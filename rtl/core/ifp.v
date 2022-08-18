@@ -31,11 +31,12 @@ module ifp(
     input  wire         clk,
     input  wire         rst,
     // I-mem interface
-    output wire [63:0]  im_req_addr,
-    output wire         im_req_valid,
-    input  wire         im_req_ready,
-    input  wire [63:0]  im_resp_rdata,
-    input  wire         im_resp_valid,
+    output wire [63:0]  if_im_req_addr,
+    output wire         if_im_req_valid,
+    input  wire         if_im_req_ready,
+    input  wire [63:0]  if_im_resp_rdata,
+    input  wire         if_im_resp_page_fault,
+    input  wire         if_im_resp_valid,
     // Decoder interface
     // dec1 higher address
     output wire [63:0]  if_dec1_pc,
@@ -43,6 +44,7 @@ module ifp(
     output wire         if_dec1_bp,
     output wire [1:0]   if_dec1_bp_track,
     output wire [63:0]  if_dec1_bt,
+    output wire         if_dec1_page_fault,
     output wire         if_dec1_valid,
     // dec0 lower address
     output wire [63:0]  if_dec0_pc,
@@ -51,6 +53,7 @@ module ifp(
     output wire [1:0]   if_dec0_bp_track,
     output wire [63:0]  if_dec0_bt,
     output wire         if_dec0_valid,
+    output wire         if_dec0_page_fault,
     input  wire         if_dec_ready,
     // Next PC
     // Exception and CSR induced control flow change are not tracked by BP
@@ -71,7 +74,7 @@ module ifp(
     reg f1_f2_valid;
 
     wire fifo_bp;
-    wire ifp_stalled_memory_resp = (f1_f2_valid && !im_resp_valid) && !rst;
+    wire ifp_stalled_memory_resp = (f1_f2_valid && !if_im_resp_valid) && !rst;
     wire ifp_stalled_back_pressure = (fifo_bp && !if_dec_ready) && !rst;
     wire ifp_stalled = ifp_stalled_memory_resp || ifp_stalled_back_pressure ||
             bp_init_active || btb_init_active;
@@ -79,7 +82,7 @@ module ifp(
     wire ifp_pc_override;
 
     wire next_valid = !ifp_stalled && !rst;
-    wire ifp_memreq_handshaking = im_req_valid && im_req_ready;
+    wire ifp_memreq_handshaking = if_im_req_valid && if_im_req_ready;
 
     fifo_1d_fwft #(.WIDTH(64)) if_new_pc_buffer(
         .clk(clk),
@@ -508,7 +511,7 @@ module ifp(
     always @(posedge clk) begin
         // Continue only if pipeline is not stalled
         if (!ifp_stalled_memory_resp) begin
-            f1_f2_valid <= im_req_valid && im_req_ready;
+            f1_f2_valid <= if_im_req_valid && if_im_req_ready;
         end
         if (ifp_memreq_handshaking) begin
             f1_f2_pc <= next_pc;
@@ -520,26 +523,28 @@ module ifp(
         end
     end
 
-    assign im_req_valid = next_valid;
-    assign im_req_addr = next_pc;
+    assign if_im_req_valid = next_valid;
+    assign if_im_req_addr = next_pc;
 
     // F2: Imem result
     wire [63:0] f2_pc_aligned = {f1_f2_pc[63:3], 3'b0};
     wire [63:0] f2_pc_aligned_plus_4 = f2_pc_aligned + 4;
 
     wire [63:0] f2_dec1_pc = f2_pc_aligned_plus_4;
-    wire [31:0] f2_dec1_instr = im_resp_rdata[63:32];
+    wire [31:0] f2_dec1_instr = if_im_resp_rdata[63:32];
     wire f2_dec1_bp = f1_bp_hi;
     wire [1:0] f2_dec1_bp_track = bp_track_hi;
     wire [63:0] f2_dec1_bt = next_pc;
     // Higher instruction is valid if lower branch NT and not both are branch
+    wire f2_dec1_page_fault = if_im_resp_page_fault;
     wire f2_dec1_valid = !f1_bp_lo && !ras_hit_lo && !insn_both_branch;
 
     wire [63:0] f2_dec0_pc = f2_pc_aligned;
-    wire [31:0] f2_dec0_instr = im_resp_rdata[31:0];
+    wire [31:0] f2_dec0_instr = if_im_resp_rdata[31:0];
     wire f2_dec0_bp = f1_bp_lo;
     wire [1:0] f2_dec0_bp_track = bp_track_lo;
     wire [63:0] f2_dec0_bt = (ras_hit_lo || f1_bp_lo) ? (next_pc) : (f2_pc_aligned_plus_4);
+    wire f2_dec0_page_fault = if_im_resp_page_fault;
     wire f2_dec0_valid = !f1_f2_pc[2]; // Low instruction is valid only if aligned
 
     wire insn1_is_bcond = f2_dec1_instr[6:0] == `OP_BRANCH;
@@ -559,18 +564,16 @@ module ifp(
     // Need to buffer insn_is_ret in case the memory takes more cycle to response
     // next request
     wire insn0_is_ret_buf, insn0_is_branch_buf, insn1_is_ret_buf, insn1_is_branch_buf;
+    /* verilator lint_off PINMISSING */
     fifo_1d_fwft #(.WIDTH(4)) if_insn_type_buffer(
         .clk(clk),
         .rst(rst),
         .a_data({insn0_is_ret, insn0_is_branch, insn1_is_ret, insn1_is_branch}),
-        .a_valid(im_resp_valid),
-        /* verilator lint_off PINCONNECTEMPTY */
-        .a_ready(),
-        /* verilator lint_on PINCONNECTEMPTY */
+        .a_valid(if_im_resp_valid),
         .b_data({insn0_is_ret_buf, insn0_is_branch_buf, insn1_is_ret_buf, insn1_is_branch_buf}),
-        .b_valid(),
-        .b_ready(im_req_ready)
+        .b_ready(if_im_req_ready)
     );
+    /* verilator lint_on PINMISSING */
 
     wire insn_both_branch = insn0_is_branch_buf && insn1_is_branch_buf && !f1_f2_pc[2];
 
@@ -578,27 +581,26 @@ module ifp(
     wire if_dec1_valid_fifo;
     wire if_dec0_valid_fifo;
 
-    fifo_2d #(.WIDTH(328)) if_fifo (
+    /* verilator lint_off PINMISSING */
+    fifo_2d #(.WIDTH(330)) if_fifo (
         .clk(clk),
         .rst(rst || ifp_pc_override),
         .a_data({
                 f2_dec1_pc, f2_dec1_instr, f2_dec1_bp, f2_dec1_bp_track,
-                f2_dec1_bt, f2_dec1_valid,
+                f2_dec1_bt, f2_dec1_page_fault, f2_dec1_valid,
                 f2_dec0_pc, f2_dec0_instr, f2_dec0_bp, f2_dec0_bp_track,
-                f2_dec0_bt, f2_dec0_valid}),
-        .a_valid(im_resp_valid),
-        /* verilator lint_off PINCONNECTEMPTY */
-        .a_ready(),
-        /* verilator lint_on PINCONNECTEMPTY */
+                f2_dec0_bt, f2_dec0_page_fault, f2_dec0_valid}),
+        .a_valid(if_im_resp_valid),
         .a_almost_full(fifo_bp),
         .b_data({
                 if_dec1_pc, if_dec1_instr, if_dec1_bp, if_dec1_bp_track,
-                if_dec1_bt, if_dec1_valid_fifo,
+                if_dec1_bt, if_dec1_page_fault, if_dec1_valid_fifo,
                 if_dec0_pc, if_dec0_instr, if_dec0_bp, if_dec0_bp_track,
-                if_dec0_bt, if_dec0_valid_fifo}),
+                if_dec0_bt, if_dec0_page_fault, if_dec0_valid_fifo}),
         .b_valid(fifo_valid),
         .b_ready(if_dec_ready)
     );
+    /* verilator lint_on PINMISSING */
 
     /*`ifdef VERBOSE
     always @(posedge clk) begin

@@ -27,6 +27,7 @@
 // This is a fully combinational unit
 module du(
     input wire [31:0] instr,
+    input wire page_fault,
     // Decoder output specific for integer pipe
     output reg [3:0] op,
     output reg option,
@@ -363,6 +364,12 @@ module du(
                     mret = 1'b1;
                     intr = 1'b0;
                 end
+                else if ((funct7 == 7'b0001001) && (rd == 5'd0)) begin
+                    // sfence.vma
+                    // Currently handle it as if it's a fence.
+                    op_type = `OT_FENCE;
+                    fencei = 1'b0;
+                end
                 else begin
                     // Unknown or unsupported instruction
                     legal = 1'b0;
@@ -371,13 +378,15 @@ module du(
             else begin
                 // Zicsr
                 csr_op = funct3[1:0];
+                if ((funct3 == {1'b0, `CSR_RS}) && (rs1 == 5'd0))
+                    csr_op = `CSR_RD;
                 operand1 = (funct3[2] == 1'b1) ? `D_OPR1_ZIMM : `D_OPR1_RS1;
                 operand2 = `D_OPR2_IMM;
                 imm = imm_i_type;
                 intr = 1'b0;
                 mret = 1'b0;
                 wb_en = 1'b1;
-                if (csr_op == 2'd0) begin
+                if (funct3[1:0] == 2'd0) begin
                     legal = 1'b0;
                 end
             end
@@ -404,6 +413,14 @@ module du(
             // Send them to CSR pipe
             op_type = `OT_TRAP;
             cause = `MCAUSE_ILLEGALI;
+            intr = 1'b1;
+            mret = 1'b0;
+        end
+
+        // Handle page fault
+        if (page_fault) begin
+            op_type = `OT_TRAP;
+            cause = `MCAUSE_IPGFAULT;
             intr = 1'b1;
             mret = 1'b0;
         end

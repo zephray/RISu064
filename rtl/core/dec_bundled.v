@@ -31,6 +31,7 @@ module dec_bundled(
     input  wire         if_dec_bp,
     input  wire [1:0]   if_dec_bp_track,
     input  wire [63:0]  if_dec_bt,
+    input  wire         if_dec_page_fault,
     // IX interface
     output wire [247:0] dec_ix_bundle
 );
@@ -64,6 +65,7 @@ module dec_bundled(
     wire        dec_fencei;
     du du0(
         .instr(if_dec_instr),
+        .page_fault(if_dec_page_fault),
         .op(dec_op),
         .option(dec_option),
         .truncate(dec_truncate),

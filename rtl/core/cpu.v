@@ -61,6 +61,10 @@ module cpu(
     wire        lsp_unaligned_store;
     wire [63:0] lsp_unaligned_epc;
 
+    // Page fault
+    wire        mmu_load_page_fault;
+    wire        mmu_store_page_fault;
+
     // Register file
     wire [4:0]  rf_rsrc0;
     wire [63:0] rf_rdata0;
@@ -97,17 +101,25 @@ module cpu(
     );
 
     // IF stage
+    wire [63:0] if_req_addr;
+    wire        if_req_valid;
+    wire        if_req_ready;
+    wire [63:0] if_resp_rdata;
+    wire        if_resp_page_fault;
+    wire        if_resp_valid;
     wire [63:0] if_dec1_pc;
     wire [31:0] if_dec1_instr;
     wire        if_dec1_bp;
     wire [1:0]  if_dec1_bp_track;
     wire [63:0] if_dec1_bt;
+    wire        if_dec1_page_fault;
     wire        if_dec1_valid;
     wire [63:0] if_dec0_pc;
     wire [31:0] if_dec0_instr;
     wire        if_dec0_bp;
     wire [1:0]  if_dec0_bp_track;
     wire [63:0] if_dec0_bt;
+    wire        if_dec0_page_fault;
     wire        if_dec0_valid;
     wire        if_dec_ready;
     wire        ip_if_branch;
@@ -131,29 +143,32 @@ module cpu(
     assign if_new_pc = trap_if_pc_override ? trap_if_new_pc :
             ix_if_pc_override ? ix_if_new_pc : ip_if_new_pc;
     assign pipe_flush = if_pc_override || lsp_unaligned_load ||
-            lsp_unaligned_store;
+            lsp_unaligned_store || mmu_load_page_fault || mmu_store_page_fault;
 
     ifp ifp (
         .clk(clk),
         .rst(rst),
         // I-mem interface
-        .im_req_addr(im_req_addr),
-        .im_req_valid(im_req_valid),
-        .im_req_ready(im_req_ready),
-        .im_resp_rdata(im_resp_rdata),
-        .im_resp_valid(im_resp_valid),
+        .if_im_req_addr(if_req_addr),
+        .if_im_req_valid(if_req_valid),
+        .if_im_req_ready(if_req_ready),
+        .if_im_resp_rdata(if_resp_rdata),
+        .if_im_resp_page_fault(if_resp_page_fault),
+        .if_im_resp_valid(if_resp_valid),
         // Decoder interface
         .if_dec1_pc(if_dec1_pc),
         .if_dec1_instr(if_dec1_instr),
         .if_dec1_bp(if_dec1_bp),
         .if_dec1_bp_track(if_dec1_bp_track),
         .if_dec1_bt(if_dec1_bt),
+        .if_dec1_page_fault(if_dec1_page_fault),
         .if_dec1_valid(if_dec1_valid),
         .if_dec0_pc(if_dec0_pc),
         .if_dec0_instr(if_dec0_instr),
         .if_dec0_bp(if_dec0_bp),
         .if_dec0_bp_track(if_dec0_bp_track),
         .if_dec0_bt(if_dec0_bt),
+        .if_dec0_page_fault(if_dec0_page_fault),
         .if_dec0_valid(if_dec0_valid),
         .if_dec_ready(if_dec_ready),
         // Next PC
@@ -183,12 +198,14 @@ module cpu(
         .if_dec1_bp(if_dec1_bp),
         .if_dec1_bp_track(if_dec1_bp_track),
         .if_dec1_bt(if_dec1_bt),
+        .if_dec1_page_fault(if_dec1_page_fault),
         .if_dec1_valid(if_dec1_valid),
         .if_dec0_pc(if_dec0_pc),
         .if_dec0_instr(if_dec0_instr),
         .if_dec0_bp(if_dec0_bp),
         .if_dec0_bp_track(if_dec0_bp_track),
         .if_dec0_bt(if_dec0_bt),
+        .if_dec0_page_fault(if_dec0_page_fault),
         .if_dec0_valid(if_dec0_valid),
         .if_dec_ready(if_dec_ready),
         .dec1_ix_bundle(dec1_ix_bundle),
@@ -297,6 +314,7 @@ module cpu(
     wire [63:0] wb_ix_buf_value;
     wire [4:0]  wb_ix_buf_dst;
     wire        wb_ix_buf_valid;
+    wire        ix_mmu_tlb_flush_req;
     ix ix(
         .clk(clk),
         .rst(rst),
@@ -426,6 +444,11 @@ module cpu(
         .wb_ix_buf_value(wb_ix_buf_value),
         .wb_ix_buf_dst(wb_ix_buf_dst),
         .wb_ix_buf_valid(wb_ix_buf_valid),
+        // MMU signals
+        .mmu_load_page_fault(mmu_load_page_fault),
+        .mmu_store_page_fault(mmu_store_page_fault),
+        .mmu_fault_epc(ix_lsp_pc),
+        .ix_mmu_tlb_flush_req(ix_mmu_tlb_flush_req),
         // Fence I
         .im_invalidate_req(im_invalidate_req),
         .im_invalidate_resp(im_invalidate_resp),
@@ -562,18 +585,27 @@ module cpu(
     assign ip_if_branch_is_ret =  ip0_if_branch ? (ip0_if_branch_is_ret) : (ip1_if_branch_is_ret);
     assign ip_if_branch_track = ip0_if_branch ? (ip0_if_branch_track) : (ip1_if_branch_track);
 
+    wire [63:0] lsp_req_addr;
+    wire [63:0] lsp_req_wdata;
+    wire [7:0]  lsp_req_wmask;
+    wire        lsp_req_wen;
+    wire        lsp_req_valid;
+    wire        lsp_req_ready;
+    wire [63:0] lsp_resp_rdata;
+    wire        lsp_resp_valid;
+
     lsp lsp(
         .clk(clk),
         .rst(rst),
         // D-mem interface
-        .dm_req_addr(dm_req_addr),
-        .dm_req_wdata(dm_req_wdata),
-        .dm_req_wmask(dm_req_wmask),
-        .dm_req_wen(dm_req_wen),
-        .dm_req_valid(dm_req_valid),
-        .dm_req_ready(dm_req_ready),
-        .dm_resp_rdata(dm_resp_rdata),
-        .dm_resp_valid(dm_resp_valid),
+        .lsp_dm_req_addr(lsp_req_addr),
+        .lsp_dm_req_wdata(lsp_req_wdata),
+        .lsp_dm_req_wmask(lsp_req_wmask),
+        .lsp_dm_req_wen(lsp_req_wen),
+        .lsp_dm_req_valid(lsp_req_valid),
+        .lsp_dm_req_ready(lsp_req_ready),
+        .lsp_dm_resp_rdata(lsp_resp_rdata),
+        .lsp_dm_resp_valid(lsp_resp_valid),
         // From decoder
         .ix_lsp_pc(ix_lsp_pc),
         .ix_lsp_dst(ix_lsp_dst),
@@ -614,6 +646,8 @@ module cpu(
     wire trap_wb_valid;
     wire trap_wb_ready;
     wire [2:0] wb_trap_instret;
+    wire [63:0] trap_mmu_satp;
+    wire [1:0] trap_mmu_mpp;
     trap #(.HARTID(HARTID)) trap(
         .clk(clk),
         .rst(rst),
@@ -643,6 +677,9 @@ module cpu(
         .trap_wb_ready(trap_wb_ready),
         // From writeback, for counting
         .wb_trap_instret(wb_trap_instret),
+        // To MMU
+        .trap_mmu_satp(trap_mmu_satp),
+        .trap_mmu_mpp(trap_mmu_mpp),
         // To instruction fetch unit
         .trap_if_pc_override(trap_if_pc_override),
         .trap_if_new_pc(trap_if_new_pc)
@@ -731,6 +768,48 @@ module cpu(
         .wb_ix_buf_valid(wb_ix_buf_valid),
         // To trap unit
         .wb_trap_instret(wb_trap_instret)
+    );
+
+    // MMU
+    mmu mmu(
+        .clk(clk),
+        .rst(rst),
+        // CSR settings
+        .mpp(trap_mmu_mpp),
+        .satp(trap_mmu_satp),
+        .tlb_invalidate_req(ix_mmu_tlb_flush_req),
+        // Fault
+        .mmu_load_page_fault(mmu_load_page_fault),
+        .mmu_store_page_fault(mmu_store_page_fault),
+        // Instruction memory interface
+        .if_req_addr(if_req_addr),
+        .if_req_valid(if_req_valid),
+        .if_req_ready(if_req_ready),
+        .if_resp_rdata(if_resp_rdata),
+        .if_resp_page_fault(if_resp_page_fault),
+        .if_resp_valid(if_resp_valid),
+        .im_req_addr(im_req_addr),
+        .im_req_valid(im_req_valid),
+        .im_req_ready(im_req_ready),
+        .im_resp_rdata(im_resp_rdata),
+        .im_resp_valid(im_resp_valid),
+        // Data memory interface
+        .lsp_req_addr(lsp_req_addr),
+        .lsp_req_wdata(lsp_req_wdata),
+        .lsp_req_wmask(lsp_req_wmask),
+        .lsp_req_wen(lsp_req_wen),
+        .lsp_req_valid(lsp_req_valid),
+        .lsp_req_ready(lsp_req_ready),
+        .lsp_resp_rdata(lsp_resp_rdata),
+        .lsp_resp_valid(lsp_resp_valid),
+        .dm_req_addr(dm_req_addr),
+        .dm_req_wdata(dm_req_wdata),
+        .dm_req_wmask(dm_req_wmask),
+        .dm_req_wen(dm_req_wen),
+        .dm_req_valid(dm_req_valid),
+        .dm_req_ready(dm_req_ready),
+        .dm_resp_rdata(dm_resp_rdata),
+        .dm_resp_valid(dm_resp_valid)
     );
 
 endmodule

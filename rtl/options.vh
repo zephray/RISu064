@@ -59,8 +59,13 @@
 `endif
 
 // 2**RAS_DEPTH_BITS == RAS_DEPTH
-`define RAS_DEPTH       8
-`define RAS_DEPTH_BITS  3
+`define RAS_DEPTH       16
+`define RAS_DEPTH_BITS  4
 
 // Enable forwarding from MEM to IX, may reduce Fmax
 `define ENABLE_MEM_FORWARING
+
+//`define ENABLE_MMU
+
+`define TLB_ABITS       2
+`define TLB_ENTRIES     4

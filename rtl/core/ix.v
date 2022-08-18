@@ -153,6 +153,11 @@ module ix(
     input  wire [63:0]  wb_ix_buf_value,
     input  wire [4:0]   wb_ix_buf_dst,
     input  wire         wb_ix_buf_valid,
+    // MMU
+    input  wire         mmu_load_page_fault,
+    input  wire         mmu_store_page_fault,
+    input  wire [63:0]  mmu_fault_epc,
+    output wire         ix_mmu_tlb_flush_req,
     // Fence I
     output reg          im_invalidate_req,
     input  wire         im_invalidate_resp,
@@ -501,7 +506,9 @@ module ix(
     // Trap instruction also blocks all proceeding instructions
     reg trap_ongoing;
     wire int_pending = (trap_ix_ip != 16'd0);
-    wire exc_pending = (lsp_unaligned_load || lsp_unaligned_store);
+    wire lsp_fault = lsp_unaligned_load || lsp_unaligned_store;
+    wire mmu_fault = mmu_load_page_fault || mmu_store_page_fault;
+    wire exc_pending = lsp_fault || mmu_fault;
     wire ix_dec0_opr_ready = operand1_dec0_ready && operand2_dec0_ready;
     wire ix_dec1_opr_ready = operand1_dec1_ready && operand2_dec1_ready;
     wire lsp_req_pending = ix_lsp_valid;
@@ -546,7 +553,7 @@ module ix(
     reg ix_issue_md_dec0;
     reg ix_issue_md_dec1;
     reg ix_issue_trap;
-    //reg ix_fence_done;
+    reg ix_fence_done;
 
     reg ix_issue_dec0;
     reg ix_issue_dec1;
@@ -558,7 +565,7 @@ module ix(
         ix_issue_md_dec0 = 0;
         ix_issue_md_dec1 = 0;
         ix_issue_trap = 0;
-        //ix_fence_done = 0;
+        ix_fence_done = 0;
         ix_issue_dec0 = 0;
         ix_issue_dec1 = 0;
         if (ix_issue_common && dec0_ix_valid && ix_dec0_opr_ready) begin
@@ -587,7 +594,7 @@ module ix(
             else if (dec0_is_fence && ix_fenced_done &&
                     (!dec0_ix_fencei || ix_fencei_done)) begin
                 ix_issue_dec0 = 1;
-                //ix_fence_done = 1;
+                ix_fence_done = 1;
             end
 
             if (ix_issue_dec0 && ix_interdep_check && ix_dec1_opr_ready) begin
@@ -612,6 +619,9 @@ module ix(
             end
         end
     end
+
+    // TODO: Implement actual sfence.vma support
+    assign ix_mmu_tlb_flush_req = ix_fence_done;
 
     wire ix_issue_ip0 = ix_issue_ip0_dec0;
     wire ix_issue_ip1 = ix_issue_ip1_dec1;
@@ -781,13 +791,15 @@ module ix(
             trap_ongoing <= 1'b1;
         end
         else if (exc_pending) begin
-            ix_trap_pc <= lsp_unaligned_epc;
+            ix_trap_pc <= lsp_fault ? lsp_unaligned_epc : mmu_fault_epc;
             ix_trap_mret <= 1'b0;
             ix_trap_int <= 1'b1;
             ix_trap_intexc <= `MCAUSE_EXCEPTION;
             ix_trap_cause <=
                     (lsp_unaligned_load) ? (`MCAUSE_LMISALGN) :
-                    (lsp_unaligned_store) ? (`MCAUSE_SMISALGN) : 4'bx;
+                    (lsp_unaligned_store) ? (`MCAUSE_SMISALGN) :
+                    (mmu_load_page_fault) ? (`MCAUSE_LPGFAULT) :
+                    (mmu_store_page_fault) ? (`MCAUSE_SPGFAULT) : 4'bx;
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end

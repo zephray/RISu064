@@ -147,6 +147,7 @@
 `define MD_DIV          1'd1
 
 // CSR operations
+`define CSR_RD          2'd0
 `define CSR_RW          2'd1
 `define CSR_RS          2'd2
 `define CSR_RC          2'd3
@@ -166,9 +167,20 @@
 `define CSR_MSCRATCH    12'h340
 `define CSR_MEPC        12'h341
 `define CSR_MCAUSE      12'h342
+`define CSR_MTVAL       12'h343
 `define CSR_MIP         12'h344
 `define CSR_MCYCLE      12'hb00
 `define CSR_MINSTRET    12'hb02
+
+/*`define CSR_SSTATUS     12'h100
+`define CSR_SIE         12'h104
+`define CSR_STVEC       12'h105
+`define CSR_SSCRATCH    12'h140
+`define CSR_SEPC        12'h141
+`define CSR_SCAUSE      12'h142
+`define CSR_STVAL       12'h143
+`define CSR_SIP         12'h144*/
+`define CSR_SATP        12'h180
 
 // MCAUSE
 // MSB
@@ -217,7 +229,7 @@
 `define MISA_EXT_USER       (64'b1 << 20)
 `define MISA_EXT_VECTOR     (64'b1 << 21)
 `define MISA_EXT_XNONSTD    (64'b1 << 23)
-`define MISA_VAL            ((`MISA_XLEN_64 << 62) | `MISA_EXT_IBASE)
+`define MISA_VAL            ((`MISA_XLEN_64 << 62) | `MISA_EXT_IBASE | `MISA_EXT_MULDIV)
 
 // MVENDOR
 `define MVENDORID           64'b0
@@ -231,9 +243,29 @@
 // MHARTID is set as an parameter
 
 // MSTATUS
+`define MSTATUS_MPP_MSB     12
+`define MSTATUS_MPP_LSB     11
 `define MSTATUS_MPIE_BIT    7
 `define MSTATUS_MIE_BIT     3
+
+`define MSTATUS_MPP_USER        2'd0
+`define MSTATUS_MPP_SUPERVISOR  2'd1
+`define MSTATUS_MPP_MACHINE     2'd3
 
 // MTVEC
 `define MTVEC_MODE_DIRECT   2'd0
 `define MTVEC_MODE_VECTORED 2'd1
+
+// SATP
+`define SATP_MODE_BARE      4'd0
+`define SATP_MODE_SV39      4'd8
+
+// PTE
+`define PTE_VALID           0
+`define PTE_READ            1
+`define PTE_WRITE           2
+`define PTE_EXECUTE         3
+`define PTE_USER            4
+`define PTE_GLOBAL          5
+`define PTE_ACCESS          6
+`define PTE_DIRTY           7

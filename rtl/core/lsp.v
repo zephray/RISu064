@@ -30,14 +30,14 @@ module lsp(
     input  wire         clk,
     input  wire         rst,
     // D-mem interface
-    output wire [63:0]  dm_req_addr,
-    output wire [63:0]  dm_req_wdata,
-    output wire [7:0]   dm_req_wmask,
-    output wire         dm_req_wen,
-    output wire         dm_req_valid,
-    input  wire         dm_req_ready,
-    input  wire [63:0]  dm_resp_rdata,
-    input  wire         dm_resp_valid,
+    output wire [63:0]  lsp_dm_req_addr,
+    output wire [63:0]  lsp_dm_req_wdata,
+    output wire [7:0]   lsp_dm_req_wmask,
+    output wire         lsp_dm_req_wen,
+    output wire         lsp_dm_req_valid,
+    input  wire         lsp_dm_req_ready,
+    input  wire [63:0]  lsp_dm_resp_rdata,
+    input  wire         lsp_dm_resp_valid,
     // From issue
     input  wire [63:0]  ix_lsp_pc,
     input  wire [4:0]   ix_lsp_dst,
@@ -126,7 +126,7 @@ module lsp(
             lsp_wb_pc <= ag_m_pc;
             lsp_wb_dst <= ag_m_dst;
             lsp_wb_wb_en <= ag_m_wb_en;
-            lsp_wb_valid <= dm_resp_valid &&
+            lsp_wb_valid <= lsp_dm_resp_valid &&
                     (!m_abort && !(ag_m_speculate && ag_abort));
             m_abort <= 1'b0;
         end
@@ -136,7 +136,7 @@ module lsp(
         if (ag_m_speculate && ag_abort)
             m_abort <= 1'b1;
 
-        if (dm_resp_valid && dm_resp_valid) begin
+        if (lsp_dm_resp_valid && lsp_dm_resp_valid) begin
             m_abort <= 1'b0;
             lsp_ix_mem_busy <= 1'b0;
         end
@@ -169,17 +169,17 @@ module lsp(
     assign lsp_unaligned_epc = ag_m_pc;
 
     // Same stage...
-    assign dm_req_addr = agu_addr;
-    assign dm_req_wdata = mem_wdata;
-    assign dm_req_wmask = mem_wmask;
-    assign dm_req_wen = !ix_lsp_wb_en;
+    assign lsp_dm_req_addr = agu_addr;
+    assign lsp_dm_req_wdata = mem_wdata;
+    assign lsp_dm_req_wmask = mem_wmask;
+    assign lsp_dm_req_wen = !ix_lsp_wb_en;
     wire [1:0] m_wb_mem_width = ag_m_mem_width;;
 
-    assign dm_req_valid = ix_lsp_valid && !rst && !ag_abort && !ualign;
-    assign ix_lsp_ready = dm_req_ready || ag_abort || ualign;
+    assign lsp_dm_req_valid = ix_lsp_valid && !rst && !ag_abort && !ualign;
+    assign ix_lsp_ready = lsp_dm_req_ready || ag_abort || ualign;
 
     // Memory stage
-    wire [63:0] mem_rd = dm_resp_rdata;
+    wire [63:0] mem_rd = lsp_dm_resp_rdata;
 
     wire [1:0] ag_m_half_offset = ag_m_byte_offset[2:1];
     wire ag_m_word_offset = ag_m_byte_offset[2];
@@ -221,7 +221,7 @@ module lsp(
     assign lsp_ix_mem_wb_en = ag_m_wb_en && lsp_ix_mem_busy;
     assign lsp_ix_mem_dst = ag_m_dst;
     assign lsp_ix_mem_result = m_wb_result;
-    assign lsp_ix_mem_result_valid = dm_resp_valid &&
+    assign lsp_ix_mem_result_valid = lsp_dm_resp_valid &&
             (!m_abort && !(ag_m_speculate && ag_abort));
 
 endmodule

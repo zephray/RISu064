@@ -36,6 +36,7 @@ module dec(
     input  wire         if_dec1_bp,
     input  wire [1:0]   if_dec1_bp_track,
     input  wire [63:0]  if_dec1_bt,
+    input  wire         if_dec1_page_fault,
     input  wire         if_dec1_valid,
     // dec0 lower address
     input  wire [63:0]  if_dec0_pc,
@@ -43,6 +44,7 @@ module dec(
     input  wire         if_dec0_bp,
     input  wire [1:0]   if_dec0_bp_track,
     input  wire [63:0]  if_dec0_bt,
+    input  wire         if_dec0_page_fault,
     input  wire         if_dec0_valid,
     output wire         if_dec_ready,
     // IX interface
@@ -64,6 +66,7 @@ module dec(
         .if_dec_bp(if_dec0_bp),
         .if_dec_bp_track(if_dec0_bp_track),
         .if_dec_bt(if_dec0_bt),
+        .if_dec_page_fault(if_dec0_page_fault),
         // IX interface
         .dec_ix_bundle(dec0_bundle)
     );
@@ -75,12 +78,12 @@ module dec(
         .if_dec_bp(if_dec1_bp),
         .if_dec_bp_track(if_dec1_bp_track),
         .if_dec_bt(if_dec1_bt),
+        .if_dec_page_fault(if_dec1_page_fault),
         // IX interface
         .dec_ix_bundle(dec1_bundle)
     );
 
-    // TODO: IFQ in IF stage could probably be removed entirely, favoring
-    // this decoded instruction queue
+    /* verilator lint_off PINMISSING */
     fifo_2w2r #(.WIDTH(248), .ABITS(3), .DEPTH(6)) iq (
         .clk(clk),
         .rst(rst || pipe_flush),
@@ -89,8 +92,6 @@ module dec(
         .a0_data(dec0_bundle),
         .a0_valid(if_dec0_valid),
         .a_ready(if_dec_ready),
-        .a_almost_full(),
-        .a_full(),
         .b1_data(dec1_ix_bundle),
         .b1_valid(dec1_ix_valid),
         .b1_ready(dec1_ix_ready),
@@ -98,5 +99,6 @@ module dec(
         .b0_valid(dec0_ix_valid),
         .b0_ready(dec0_ix_ready)
     );
+    /* verilator lint_on PINMISSING */
 
 endmodule

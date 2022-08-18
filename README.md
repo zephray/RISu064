@@ -1,12 +1,14 @@
 # RISu64
 
-![pipeline_diagram](doc/pipeline.svg)
+![illustration](doc/vol6.jpg)
 
-RISu64 (Reduced Instruction Set μProcessor 64 / Squirrel 64) is my toy 64-bit RISC-V compatible processor.
+RISu64 (Reduced Instruction Set μProcessor 64 / Squirrel 64) is my toy 64-bit RISC-V compatible processor. Illustration by [Andy Lithia](https://github.com/andylithia).
 
 ## Features
 
-- RV64IMZicsr_Zifencei
+![pipeline_diagram](doc/pipeline.svg)
+
+- RV64IMZicsr_Zifencei instruction set
 - 7-stage pipeline: PCGen(F1), IMem(F2), Decode(ID), Issue(IX), Execute(EX), DMem(MEM), Writeback(WB).
 - In-order issue and out-of-order writeback
 - Dual-issue
@@ -15,6 +17,7 @@ RISu64 (Reduced Instruction Set μProcessor 64 / Squirrel 64) is my toy 64-bit R
 - 1x Load store unit (aligned access only, unaligned access generate precise exception)
 - 1x Multiply/ divide unit (non-pipelined, 3/6-cycle 32/64bit multiply, 34/66-cycle 64bit divide)
 - Optional L1 instruction and data cache (2-way set associative blocking cache)
+- Optional experimental hardware refilled MMU
 - Machine mode only with exception and interrupt support
 - Written in portable synthesizable Verilog
 
@@ -47,6 +50,14 @@ Here is just a random list of things I want to / is working on that may or may n
 - SMP and cache-coherency
 - Maybe MMU
 - Rewrite in BSV
+
+## Running Simulation
+
+In sim folder, run make. It should build the simulator.
+
+To run coremark, build the coremark by running ```make``` in tests/coremark, then in the sim folder do ```./simulator --ram ../tests/coremark/coremark.bin```.
+
+Note: Verilator required for building the simulator. RV64 gcc (riscv64-unknown-elf-gcc) required for building the coremark.
 
 ## Acknowledgements
 

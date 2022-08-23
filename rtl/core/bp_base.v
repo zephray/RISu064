@@ -22,6 +22,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`include "options.vh"
+
 module bp_base(
     input  wire                         clk,
     input  wire                         rst,
@@ -44,9 +46,12 @@ module bp_base(
     wire [7:0] bp_counter;
     wire [3:0] bp_counter_hilo;
     reg bp_hilo;
-    wire bp_update_ren;
     /*ram_1024_8 bpu_ram(*/
-    ram_customize #(.DBITS(8), .ABITS(`BHT_MEM_ABITS)) bpu_ram(
+    `ifdef BHT_RAM_PRIM
+    `BHT_RAM_PRIM bpu_ram(
+    `else
+    ram_generic_1rw1r #(.DBITS(8), .ABITS(`BHT_MEM_ABITS)) bpu_ram(
+    `endif
         .clk(clk),
         .rst(rst),
         .addr0(bp_wr_index),
@@ -81,7 +86,7 @@ module bp_base(
     assign bp_wr_index = (bp_init_active) ? (bp_init_index) :
             (bp_update_fifo_index[`BHT_ABITS-1:2]);
     assign bp_mem_wr_data = (bp_init_active) ? (8'b01010101) : (bp_wr_data);
-    wire bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
+    assign bp_wr_en = (bp_init_active) ? (1'b1) : (bp_update_en);
 
     reg bp_update_fifo_ready;
     wire bp_update_fifo_valid;

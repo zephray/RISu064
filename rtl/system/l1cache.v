@@ -22,6 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`include "options.vh"
 
 module l1cache(
     input  wire         clk,
@@ -83,8 +84,8 @@ module l1cache(
 
     localparam CACHE_WAY = 2; // This shouldn't be changed
     localparam CACHE_WAY_BITS = 1; // This shouldn't be changed
-    localparam CACHE_BLOCK = 256; // Line number inside each way
-    localparam CACHE_BLOCK_ABITS = 8;
+    localparam CACHE_BLOCK = `CACHE_BLOCK; // Line number inside each way
+    localparam CACHE_BLOCK_ABITS = `CACHE_BLOCK_ABITS;
     localparam CACHE_LINE_IN_BLOCK = 4;
     localparam CACHE_LINE_IN_BLOCK_ABITS = 2; // Bits needed to address DW inside line
     localparam CACHE_LINE_ABITS = CACHE_BLOCK_ABITS + CACHE_LINE_IN_BLOCK_ABITS;
@@ -124,32 +125,45 @@ module l1cache(
 
     // Adapt to use standard 32-bit memory macro
     wire [31:0] meta_sram_rd [0:CACHE_WAY-1];
+    wire [31:0] meta_sram_wr [0:CACHE_WAY-1];
 
     genvar i, j;
     generate
-    for (i = 0; i < CACHE_WAY; i = i + 1) begin
-        ram_256_32 cache_meta(
+    for (i = 0; i < CACHE_WAY; i = i + 1) begin: cache_ram
+        `ifdef CACHE_META_RAM_PRIM
+        `CACHE_META_RAM_PRIM cache_meta(
+        `else
+        ram_generic_1rw1r #(.DBITS(32), .ABITS(CACHE_BLOCK_ABITS)) cache_meta(
+        `endif
             .clk(clk),
             .rst(rst),
             .raddr(cache_meta_raddr_mux),
         // 2nd pipeline stage (after 1-cycle RAM)
             // Read has 1 cycle delay
             .rd(meta_sram_rd[i]),
+            .re(1'b1),
             // Write happens after read, thus in p2
             .waddr(p2_cache_meta_waddr_mux),
             .we(p2_cache_meta_we[i]),
-            .wr({10'b0, p2_cache_meta_wr[i]})
+            .wr(meta_sram_wr[i])
         );
 
         assign p2_cache_meta_rd[i] = meta_sram_rd[i][CACHE_LEN_TOTAL-1:0];
+        assign meta_sram_wr[i][31:CACHE_LEN_TOTAL] = 0;
+        assign meta_sram_wr[i][CACHE_LEN_TOTAL-1:0] = p2_cache_meta_wr[i];
 
-        ram_1024_64 cache_data(
+        `ifdef CACHE_DATA_RAM_PRIM
+        `CACHE_DATA_RAM_PRIM cache_data(
+        `else
+        ram_generic_1rw1r #(.DBITS(CACHE_LINE_DBITS), .ABITS(CACHE_LINE_ABITS)) cache_data(
+        `endif
             .clk(clk),
             .rst(rst),
             .raddr(cache_data_raddr_mux),
         // 2nd pipeline stage (after 1-cycle RAM)
             // Read has 1 cycle delay
             .rd(p2_cache_data_rd[i]),
+            .re(1'b1),
             // Write happens after read, thus in p2
             .waddr(p2_cache_data_waddr_mux),
             .we(p2_cache_data_we[i]),

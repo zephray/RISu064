@@ -22,49 +22,74 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-module ram_256_32(
+module ram_512_64(
     input wire clk,
     input wire rst,
     // Read port
-    input wire [7:0] raddr,
-    output wire [31:0] rd,
+    input wire [8:0] raddr,
+    output wire [63:0] rd,
     input wire re,
     // Write port
-    input wire [7:0] waddr,
-    input wire [31:0] wr,
+    input wire [8:0] waddr,
+    input wire [63:0] wr,
     input wire we
 );
 
 `ifdef SKY130
-    // Collision avoidance policy: write take priority
-    wire re_ca = ((raddr == waddr) && we) ? 1'b0 : re;
+    reg rd_bypass_en;
+    reg [63:0] rd_bypass;
+    always @(posedge clk) begin
+        rd_bypass <= wr;
+        rd_bypass_en <= (raddr == waddr) && we;
+    end
 
-    // No 128_32 macro provided, so...
-    sky130_sram_1kbyte_1rw1r_32x256_8 mem(
+    wire [63:0] ram_rd;
+    wire ram_re = (raddr != waddr);
+
+    sky130_sram_2kbyte_1rw1r_32x512_8 lo_mem(
         .clk0(clk),
         .csb0(!we),
         .web0(!we),
         .wmask0(4'hF),
-        .addr0(waddr),
-        .din0(wr),
+        .addr0(waddr[8:0]),
+        .din0(wr[31:0]),
         .dout0(),
         .clk1(clk),
-        .csb1(!re_ca),
-        .addr1(raddr),
-        .dout1(rd)
+        .csb1(!ram_re),
+        .addr1(raddr[8:0]),
+        .dout1(ram_rd[31:0])
     );
+
+    sky130_sram_2kbyte_1rw1r_32x512_8 hi_mem(
+        .clk0(clk),
+        .csb0(!we),
+        .web0(!we),
+        .wmask0(4'hF),
+        .addr0(waddr[8:0]),
+        .din0(wr[63:32]),
+        .dout0(),
+        .clk1(clk),
+        .csb1(!ram_re),
+        .addr1(raddr[8:0]),
+        .dout1(ram_rd[63:32])
+    );
+
+    assign rd = rd_bypass_en ? rd_bypass : ram_rd;
 `else
-    reg [31:0] mem [0:127];
-    reg [31:0] rd_reg;
+    reg [63:0] mem [0:511];
+    reg [63:0] rd_reg;
 
     always @(posedge clk) begin
         if (!rst) begin
+            if ((raddr == waddr) && we) begin
+                rd_reg <= wr;
+            end
+            else begin
+                rd_reg <= mem[raddr];
+            end
+            // W
             if (we) begin
                 mem[waddr] <= wr;
-            end
-            
-            if (re) begin
-                rd_reg <= mem[raddr];
             end
         end
     end

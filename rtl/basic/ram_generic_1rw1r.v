@@ -24,7 +24,7 @@
 //
 // This won't directly map to ASIC, useful for FPGA prototyping or simulation,
 // Design exploration etc.
-module ram_customize(
+module ram_generic_1rw1r(
     input wire clk,
     input wire rst,
     // Read write port

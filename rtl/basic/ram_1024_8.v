@@ -22,54 +22,57 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+module ram_1024_8(
+    input wire clk,
+    input wire rst,
+    // Read write port
+    input wire [9:0] addr0,
+    input wire re0,
+    output wire [7:0] rd0,
+    input wire [7:0] wr0,
+    input wire we0,
+    // Read only port
+    input wire [9:0] addr1,
+    input wire re1,
+    output wire [7:0] rd1
+);
 
-// System options
-//`define USE_L1_CACHE
+`ifdef SKY130
+    sky130_sram_1kbyte_1rw1r_8x1024_8 mem(
+        .clk0(clk),
+        .csb0(!(re0 || we0)),
+        .web0(!we0),
+        .wmask0(1'b1),
+        .addr0(addr0),
+        .din0(wr0),
+        .dout0(rd0),
+        .clk1(clk),
+        .csb1(!re1),
+        .addr1(addr1),
+        .dout1(rd1)
+    );
+`else
+    reg [7:0] mem [0:1023];
+    reg [7:0] rd0_reg;
+    reg [7:0] rd1_reg;
 
-// 2**BTB_ABITS == BTB_DEPTH
-`define BTB_ABITS       5
-`define BTB_DEPTH       32
+    always @(posedge clk) begin
+        if (!rst) begin
+            if (re0) begin
+                rd0_reg <= mem[addr0];
+            end
+            else if (we0) begin
+                mem[addr0] <= wr0;
+            end
+            
+            if (re1) begin
+                rd1_reg <= mem[addr1];
+            end
+        end
+    end
 
-// Cache block size, each block is 64
-`define CACHE_BLOCK         256
-`define CACHE_BLOCK_ABITS   8
-
-// 2**BHT_ABITS == BHT_DEPTH
-`define BHT_ABITS       12
-`define BHT_DEPTH       4096
-// BHT memory is 8-bit wide
-`define BHT_MEM_ABITS   (`BHT_ABITS - 2)
-`define BHT_MEM_DEPTH   (`BHT_DEPTH / 4)
-
-// Branch predictor
-//`define BPU_ALWAYS_NOT_TAKEN
-//`define BPU_ALWAYS_TAKEN
-//`define BPU_GLOBAL_BIMODAL
-//`define BPU_GLOBAL_GSHARE
-//`define BPU_GLOBAL_GSELECT
-`define BPU_TOURNAMENT
-
-`ifdef BPU_GLOBAL_BIMODAL
-    `define BPU_GLOBAL
-`elsif BPU_GLOBAL_GSELECT
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   3
-`elsif BPU_GLOBAL_GSHARE
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
-`elsif BPU_TOURNAMENT
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
+    assign rd0 = rd0_reg;
+    assign rd1 = rd1_reg;
 `endif
 
-// 2**RAS_DEPTH_BITS == RAS_DEPTH
-`define RAS_DEPTH       16
-`define RAS_DEPTH_BITS  4
-
-// Enable forwarding from MEM to IX, may reduce Fmax
-`define ENABLE_MEM_FORWARING
-
-//`define ENABLE_MMU
-
-`define TLB_ABITS       2
-`define TLB_ENTRIES     4
+endmodule

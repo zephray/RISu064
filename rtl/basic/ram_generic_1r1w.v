@@ -22,54 +22,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+module ram_generic_1r1w(
+    input wire clk,
+    input wire rst,
+    // Read port
+    input wire [6:0] raddr,
+    output wire [31:0] rd,
+    input wire re,
+    // Write port
+    input wire [6:0] waddr,
+    input wire [31:0] wr,
+    input wire we
+);
 
-// System options
-//`define USE_L1_CACHE
+    parameter DBITS = 8;
+    parameter ABITS = 12;
+    localparam DEPTH = (1 << ABITS);
 
-// 2**BTB_ABITS == BTB_DEPTH
-`define BTB_ABITS       5
-`define BTB_DEPTH       32
+    reg [DBITS-1:0] mem [0:DEPTH-1];
+    reg [DBITS-1:0] rd_reg;
 
-// Cache block size, each block is 64
-`define CACHE_BLOCK         256
-`define CACHE_BLOCK_ABITS   8
+    always @(posedge clk) begin
+        if (!rst) begin
+            if (we) begin
+                mem[waddr] <= wr;
+            end
+            
+            if (re) begin
+                rd_reg <= mem[raddr];
+            end
+        end
+    end
 
-// 2**BHT_ABITS == BHT_DEPTH
-`define BHT_ABITS       12
-`define BHT_DEPTH       4096
-// BHT memory is 8-bit wide
-`define BHT_MEM_ABITS   (`BHT_ABITS - 2)
-`define BHT_MEM_DEPTH   (`BHT_DEPTH / 4)
+    assign rd = rd_reg;
 
-// Branch predictor
-//`define BPU_ALWAYS_NOT_TAKEN
-//`define BPU_ALWAYS_TAKEN
-//`define BPU_GLOBAL_BIMODAL
-//`define BPU_GLOBAL_GSHARE
-//`define BPU_GLOBAL_GSELECT
-`define BPU_TOURNAMENT
-
-`ifdef BPU_GLOBAL_BIMODAL
-    `define BPU_GLOBAL
-`elsif BPU_GLOBAL_GSELECT
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   3
-`elsif BPU_GLOBAL_GSHARE
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
-`elsif BPU_TOURNAMENT
-    `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
-`endif
-
-// 2**RAS_DEPTH_BITS == RAS_DEPTH
-`define RAS_DEPTH       16
-`define RAS_DEPTH_BITS  4
-
-// Enable forwarding from MEM to IX, may reduce Fmax
-`define ENABLE_MEM_FORWARING
-
-//`define ENABLE_MMU
-
-`define TLB_ABITS       2
-`define TLB_ENTRIES     4
+endmodule

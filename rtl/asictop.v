@@ -33,7 +33,10 @@ module asictop(
     output wire [21:0]  ml_data_o,
     input  wire [21:0]  ml_data_i,
     output wire         ml_data_oe,
-    output wire         ml_data_ie
+    output wire         ml_data_ie,
+    input  wire         extint_software,
+    input  wire         extint_timer,
+    input  wire         extint_external
 );
 
     wire [31:0] ib_req_addr;
@@ -53,9 +56,6 @@ module asictop(
     wire [63:0] db_resp_rdata;
     wire        db_resp_valid;
     wire        db_resp_ready;
-    wire        extint_software;
-    wire        extint_timer;
-    wire        extint_external;
 
     // CPU core
     risu risu(
@@ -82,11 +82,6 @@ module asictop(
         .extint_timer(extint_timer),
         .extint_external(extint_external)
     );
-
-    /// TODO: Do something about this
-    assign extint_software = 1'b0;
-    assign extint_timer = 1'b0;
-    assign extint_external = 1'b0;
 
     wire [31:0] ib_req_addr_buf;
     wire [2:0]  ib_req_size_buf;

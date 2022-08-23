@@ -57,11 +57,11 @@ module lsp(
     output wire         lsp_ix_mem_result_valid,
     output wire [63:0]  lsp_ix_mem_result,
     // To writeback
-    output wire [4:0]   lsp_wb_dst,
-    output wire [63:0]  lsp_wb_result,
-    output wire [63:0]  lsp_wb_pc,
-    output wire         lsp_wb_wb_en,
-    output wire         lsp_wb_valid,
+    output reg  [4:0]   lsp_wb_dst,
+    output reg  [63:0]  lsp_wb_result,
+    output reg  [63:0]  lsp_wb_pc,
+    output reg          lsp_wb_wb_en,
+    output reg          lsp_wb_valid,
     input  wire         lsp_wb_ready,
     // Abort the current AG stage request
     input  wire         ag_abort,

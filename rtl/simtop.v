@@ -62,8 +62,11 @@ module simtop(
         .ml_data_i(ml_data_b2a),
         .ml_data_oe(ml_a_data_oe),
         /* verilator lint_off PINCONNECTEMPTY */
-        .ml_data_ie()
+        .ml_data_ie(),
         /* verilator lint_on PINCONNECTEMPTY */
+        .extint_software(1'b0),
+        .extint_external(1'b0),
+        .extint_timer(1'b0)
     );
 
     // The bridge allows the requests and responses to be interleaved

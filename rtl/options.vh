@@ -69,6 +69,8 @@
 // Enable forwarding from MEM to IX, may reduce Fmax
 `define ENABLE_MEM_FORWARING
 
+`define ENABLE_M_EXT
+
 //`define ENABLE_MMU
 
 `define TLB_ABITS       2

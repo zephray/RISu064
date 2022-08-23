@@ -96,6 +96,8 @@ module du(
         mret = 1'bx;
         intr = 1'bx;
         cause = 4'bx;
+        md_op = 3'bx;
+        muldiv = 1'bx;
         op_type = 3'bx;
         operand1 = 2'bx;
         operand2 = 2'bx;
@@ -155,6 +157,7 @@ module du(
         end
         `OP_INTREG: begin
             if (funct7 == 7'b0000001) begin
+                `ifdef ENABLE_M_EXT
                 op_type = `OT_MULDIV;
                 operand1 = `D_OPR1_RS1;
                 operand2 = `D_OPR2_RS2;
@@ -162,6 +165,9 @@ module du(
                 muldiv = funct3[2];
                 wb_en = 1'b1;
                 legal = 1'b1;
+                `else
+                legal = 1'b0;
+                `endif
             end
             else begin
                 op_type = `OT_INT;
@@ -211,6 +217,7 @@ module du(
         end
         `OP_INTREGW: begin
             if (funct7 == 7'b0000001) begin
+                `ifdef ENABLE_M_EXT
                 op_type = `OT_MULDIV;
                 operand1 = `D_OPR1_RS1;
                 operand2 = `D_OPR2_RS2;
@@ -219,6 +226,9 @@ module du(
                 wb_en = 1'b1;
                 legal = ((funct3 != 3'b001) && (funct3 != 3'b010) &&
                         (funct3 != 3'b011));
+                `else
+                legal = 1'b0;
+                `endif
             end
             else begin
                 op_type = `OT_INT;

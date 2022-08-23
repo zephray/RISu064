@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`include "options.vh"
 
 // These directly correspond to funct3
 `define BS_EQ       3'd0
@@ -215,9 +216,9 @@
 `define MIE_MEI             `MCAUSE_MEI
 
 // MISA
-`define MISA_XLEN_32        64'd1
-`define MISA_XLEN_64        64'd2
-`define MISA_XLEN_128       64'd3
+`define MISA_XLEN_32        (64'd1 << 62)
+`define MISA_XLEN_64        (64'd2 << 62)
+`define MISA_XLEN_128       (64'd3 << 62)
 `define MISA_EXT_ATOMIC     (64'b1 << 0)
 `define MISA_EXT_COMPRESS   (64'b1 << 2)
 `define MISA_EXT_DOUBLE     (64'b1 << 3)
@@ -229,7 +230,11 @@
 `define MISA_EXT_USER       (64'b1 << 20)
 `define MISA_EXT_VECTOR     (64'b1 << 21)
 `define MISA_EXT_XNONSTD    (64'b1 << 23)
-`define MISA_VAL            ((`MISA_XLEN_64 << 62) | `MISA_EXT_IBASE | `MISA_EXT_MULDIV)
+`ifdef ENABLE_M_EXT
+`define MISA_VAL            (`MISA_XLEN_64 | `MISA_EXT_IBASE | `MISA_EXT_MULDIV)
+`else
+`define MISA_VAL            (`MISA_XLEN_64 | `MISA_EXT_IBASE)
+`endif
 
 // MVENDOR
 `define MVENDORID           64'b0

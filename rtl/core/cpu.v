@@ -690,6 +690,7 @@ module cpu(
     wire [63:0] md_wb_pc;
     wire        md_wb_valid;
     wire        md_wb_ready;
+    `ifdef ENABLE_M_EXT
     md md(
         .clk(clk),
         .rst(rst),
@@ -715,6 +716,15 @@ module cpu(
         // This unit doesn't support stall
         .md_abort(pipe_flush)
     );
+    `else
+    assign ix_md_ready = 1'b0;
+    assign md_ix_dst = 5'bx;
+    assign md_ix_active = 1'b0;
+    assign md_wb_dst = 5'bx;
+    assign md_wb_result = 64'bx;
+    assign md_wb_pc = 64'bx;
+    assign md_wb_valid = 1'b0;
+    `endif
 
     wb wb(
         .clk(clk),

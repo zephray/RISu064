@@ -22,40 +22,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-module ram_128_32(
+module ram_128_24(
     input wire clk,
     input wire rst,
     // Read port
     input wire [6:0] raddr,
-    output wire [31:0] rd,
+    output wire [23:0] rd,
     input wire re,
     // Write port
     input wire [6:0] waddr,
-    input wire [31:0] wr,
+    input wire [23:0] wr,
     input wire we
 );
 
 `ifdef SKY130
-    // Collision avoidance policy: write take priority
-    wire re_ca = ((raddr == waddr) && we) ? 1'b0 : re;
-
-    // No 128_32 macro provided, so...
-    sky130_sram_1kbyte_1rw1r_32x256_8 mem(
+    sky130_sram_1r1w_24x128_8 mem(
         .clk0(clk),
         .csb0(!we),
-        .web0(!we),
-        .wmask0(4'hF),
         .addr0(waddr),
         .din0(wr),
-        .dout0(),
         .clk1(clk),
-        .csb1(!re_ca),
+        .csb1(!re),
         .addr1(raddr),
         .dout1(rd)
     );
 `else
-    reg [31:0] mem [0:127];
-    reg [31:0] rd_reg;
+    reg [23:0] mem [0:127];
+    reg [23:0] rd_reg;
 
     always @(posedge clk) begin
         if (!rst) begin

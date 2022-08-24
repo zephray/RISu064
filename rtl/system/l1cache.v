@@ -123,9 +123,9 @@ module l1cache(
     wire [CACHE_LINE_DBITS-1:0] p2_cache_data_wr [0:CACHE_WAY-1];
     wire                        p2_cache_data_we [0:CACHE_WAY-1];
 
-    // Adapt to use standard 32-bit memory macro
-    wire [31:0] meta_sram_rd [0:CACHE_WAY-1];
-    wire [31:0] meta_sram_wr [0:CACHE_WAY-1];
+    // Adapt to use standard 24-bit memory
+    wire [23:0] meta_sram_rd [0:CACHE_WAY-1];
+    wire [23:0] meta_sram_wr [0:CACHE_WAY-1];
 
     genvar i, j;
     generate
@@ -133,7 +133,7 @@ module l1cache(
         `ifdef CACHE_META_RAM_PRIM
         `CACHE_META_RAM_PRIM cache_meta(
         `else
-        ram_generic_1rw1r #(.DBITS(32), .ABITS(CACHE_BLOCK_ABITS)) cache_meta(
+        ram_generic_1rw1r #(.DBITS(24), .ABITS(CACHE_BLOCK_ABITS)) cache_meta(
         `endif
             .clk(clk),
             .rst(rst),
@@ -149,7 +149,7 @@ module l1cache(
         );
 
         assign p2_cache_meta_rd[i] = meta_sram_rd[i][CACHE_LEN_TOTAL-1:0];
-        assign meta_sram_wr[i][31:CACHE_LEN_TOTAL] = 0;
+        assign meta_sram_wr[i][23:CACHE_LEN_TOTAL] = 0;
         assign meta_sram_wr[i][CACHE_LEN_TOTAL-1:0] = p2_cache_meta_wr[i];
 
         `ifdef CACHE_DATA_RAM_PRIM

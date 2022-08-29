@@ -1,0 +1,10 @@
+build/
+__pycache__/
+pdngen.tcl
+pdngen_top.tcl
+macroplace_top.tcl
+sc_manifest.json
+*.vg
+asic_macro.def
+asic_macro.gds
+asic_macro.lef

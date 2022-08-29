@@ -44,7 +44,7 @@ module ram_512_64(
     end
 
     wire [63:0] ram_rd;
-    wire ram_re = (raddr != waddr);
+    wire ram_re = (raddr != waddr) && re;
 
     sky130_sram_2kbyte_1rw1r_32x512_8 lo_mem(
         .clk0(clk),
@@ -73,6 +73,17 @@ module ram_512_64(
         .addr1(raddr[8:0]),
         .dout1(ram_rd[63:32])
     );
+
+    /*sky130_sram_4kbyte_1r1w_64x512 mem(
+        .clk0(clk),
+        .csb0(!we),
+        .addr0(waddr),
+        .din0(wr),
+        .clk1(clk),
+        .csb1(!ram_re),
+        .addr1(raddr),
+        .dout1(ram_rd)
+    );*/
 
     assign rd = rd_bypass_en ? rd_bypass : ram_rd;
 `else

@@ -18,6 +18,9 @@ def setup(chip):
     chip.set('tool', tool, 'input', step, index, f'{design}.def')
     chip.set('tool', tool, 'output', step, index, f'{design}.def')
 
+def pin_fitler(pin):
+    return (not 'vcc' in pin) and (not 'vdd' in pin) and (not 'vss' in pin) and (not pin.startswith("io_analog"))
+
 def run(chip):
     design = chip.get('design')
     with open(f'inputs/{design}.def') as f:
@@ -54,12 +57,12 @@ def run(chip):
                         in_pin = la[1]
                         in_net = la[4]
                     # TODO: We should not use hardcoded prefixes for power nets to ignore.
-                    elif ('LAYER' in l) and (not 'vcc' in in_pin) and (not 'vss' in in_pin):
+                    elif ('LAYER' in l) and (pin_fitler(in_pin)):
                         la = l.strip().split()
                         in_layer = la[2]
                         pin_w = abs(int(la[8]) - int(la[4]))
                         pin_h = abs(int(la[9]) - int(la[5]))
-                    elif ('PLACED' in l) and (not 'vcc' in in_pin) and (not 'vss' in in_pin):
+                    elif ('PLACED' in l) and (pin_fitler(in_pin)):
                         la = l.strip().split()
                         pin_locs[in_pin] = {'layer': in_layer,
                                             'net': in_net,

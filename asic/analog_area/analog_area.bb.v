@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-`default_nettype none
 //
 // RISu64
 // Copyright 2022 Wenting Zhang
@@ -23,15 +21,11 @@
 // SOFTWARE.
 //
 (* blackbox *)
-module asic_macro (
-    inout wire vccd1,
-    inout wire vssd1,
-    input wire clk,
-    input wire rst,
-    output wire clko,
-    input wire [26:0] io_in,
-    output wire [26:0] io_out,
-    output wire [26:0] io_oeb
+module analog_area (
+    //inout wire vccd1,
+    //inout wire vssd1,
+    input [29:0] analog_la_in,
+    output [29:0] analog_la_out
 );
 
 endmodule

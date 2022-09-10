@@ -92,11 +92,13 @@ module ram_512_64(
 
     always @(posedge clk) begin
         if (!rst) begin
-            if ((raddr == waddr) && we) begin
-                rd_reg <= wr;
-            end
-            else begin
-                rd_reg <= mem[raddr];
+            if (re) begin
+                if ((raddr == waddr) && we) begin
+                    rd_reg <= wr;
+                end
+                else begin
+                    rd_reg <= mem[raddr];
+                end
             end
             // W
             if (we) begin

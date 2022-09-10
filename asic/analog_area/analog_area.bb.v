@@ -26,6 +26,17 @@ module analog_area (
     //inout wire vssd1,
     input [29:0] analog_la_in,
     output [29:0] analog_la_out
+    /*output comp,
+    input [9:0] ctlp,
+    input [9:0] ctln,
+    input [4:0] trim,
+    input [4:0] trimb,
+    input clkc*/
+    /*input clk,
+    input rst,
+    output [31:0] therm_in,
+    input therm_do,
+    input therm_fs*/
 );
 
 endmodule

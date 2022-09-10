@@ -118,6 +118,15 @@ module user_analog_project_wrapper (
     output [2:0] user_irq
 );
 
+    wire rst;
+    reg rst_sync1;
+    reg rst_sync2;
+    assign rst = rst_sync2;
+    always @(posedge user_clock2) begin
+        rst_sync2 <= rst_sync1;
+        rst_sync1 <= wb_rst_i;
+    end
+
     // All external inputs are assumed to be synchronous
     wire ml_clk;
     wire ml_clkn;
@@ -133,7 +142,7 @@ module user_analog_project_wrapper (
 
     asictop asictop (
         .clk(user_clock2),
-        .rst(wb_rst_i),
+        .rst(rst),
         .ml_clk(ml_clk),
         .ml_clkn(ml_clkn),
         .ml_abr(ml_abr),
@@ -167,10 +176,69 @@ module user_analog_project_wrapper (
     assign io_out[26] = ml_clk;
     assign io_oeb[26] = 1'b0;
 
+    // Analog part
+    /*wire comp;
+    wire [9:0] ctlp;
+    wire [9:0] ctln;
+    wire [4:0] trim;
+    wire [4:0] trimb;
+    wire clkc;
+
+    wire en;
+    wire cal;
+    wire valid;
+    wire [9:0] result;
+    wire sample;*/
+
+    /*wire [31:0] therm_in;
+    wire therm_do;
+    wire therm_fs;*/
+
     analog_area analog_area(
         .analog_la_in(la_data_in[29:0]),
         .analog_la_out(la_data_out[29:0])
+        /*.comp(comp),
+        .ctlp(ctlp),
+        .ctln(ctln),
+        .trim(trim),
+        .trimb(trimb),
+        .clkc(clkc)*/
+        /*.clk(user_clock2),
+        .rst(rst),
+        .therm_in(therm_in),
+        .therm_do(therm_do),
+        .therm_fs(therm_fs)*/
     );
+
+    /*sarlogic sarlogic(
+        .clk(user_clock2),
+        .rstn(!wb_rst_i),
+        .en(en),
+        .comp(comp),
+        .cal(cal),
+        .valid(valid),
+        .result(result),
+        .sample(sample),
+        .ctlp(ctlp),
+        .ctln(ctln),
+        .trim(trim),
+        .trimb(trimb),
+        .clkc(clkc),
+    );
+
+    assign en = la_data_in[30];
+    assign cal = la_data_in[31];
+    assign la_data_out[30] = valid;
+    assign la_data_out[31] = sample;
+    assign la_data_out[41:32] = result;*/
+
+    /*therm_out therm_out(
+        .clk(user_clock2),
+        .rst(rst),
+        .therm_in(therm_in),
+        .therm_do(therm_do),
+        .therm_fs(therm_fs)
+    );*/
 
     // TEST
     //assign io_out[26:0] = 27'b0;

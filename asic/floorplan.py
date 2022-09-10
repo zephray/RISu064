@@ -10,7 +10,7 @@ TOP_H = 3520
 MARGIN_W = 15
 MARGIN_H = 15
 
-ANALOG_Y = 2700
+ANALOG_Y = 2900
 
 RAM_8_1024 = "sky130_sram_1kbyte_1rw1r_8x1024_8"
 RAM_24_128 = "sky130_sram_1r1w_24x128"
@@ -146,20 +146,20 @@ def core_floorplan(fp):
 
     # not gonna to calculate, just going to place wherever I like
     place_ram(fp, "asictop.risu.l1d.cache_ram\[0\].cache_data.hi_mem", RAM_32_512, 4570, 220, "N", cut_right = True)
-    place_ram(fp, "asictop.risu.l1d.cache_ram\[0\].cache_data.lo_mem", RAM_32_512, 4570, 410, "N", cut_right = True)
-    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_data.hi_mem", RAM_32_512, 4570, 600, "N", cut_right = True)
-    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_data.lo_mem", RAM_32_512, 4570, 790, "N", cut_right = True)
+    place_ram(fp, "asictop.risu.l1d.cache_ram\[0\].cache_data.lo_mem", RAM_32_512, 4570, 440, "N", cut_right = True)
+    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_data.hi_mem", RAM_32_512, 4570, 660, "N", cut_right = True)
+    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_data.lo_mem", RAM_32_512, 4570, 880, "N", cut_right = True)
 
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_data.hi_mem", RAM_32_512, 3000, 220, "N")
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_data.lo_mem", RAM_32_512, 3000, 410, "N")
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_data.hi_mem", RAM_32_512, 3000, 600, "N")
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_data.lo_mem", RAM_32_512, 3000, 790, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_data.hi_mem", RAM_32_512, 2910, 220, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_data.lo_mem", RAM_32_512, 2910, 440, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_data.hi_mem", RAM_32_512, 2910, 660, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_data.lo_mem", RAM_32_512, 2910, 880, "N")
 
-    place_ram(fp, "asictop.risu.l1d.cache_ram\[0\].cache_meta.mem", RAM_32_256, 3940, 40, "N")
-    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_meta.mem", RAM_32_256, 5150, 40, "N", cut_right = True)
+    place_ram(fp, "asictop.risu.l1d.cache_ram\[0\].cache_meta.mem", RAM_32_256, 3940, 20, "N")
+    place_ram(fp, "asictop.risu.l1d.cache_ram\[1\].cache_meta.mem", RAM_32_256, 5150, 20, "N", cut_right = True)
 
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_meta.mem", RAM_32_256, 1520, 40, "N")
-    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_meta.mem", RAM_32_256, 2730, 40, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[0\].cache_meta.mem", RAM_32_256, 1520, 20, "N")
+    place_ram(fp, "asictop.risu.l1i.cache_ram\[1\].cache_meta.mem", RAM_32_256, 2730, 20, "N")
 
     place_ram(fp, "asictop.risu.cpu.ifp.bp.bpu_ram.mem", RAM_8_1024, 260, 540, "N", cut_left = True)
 
@@ -193,26 +193,32 @@ def core_floorplan(fp):
     # VCCD1
     fp.place_wires(["vccd1"], 2911.7, 3198.92, 0, 0, 8.3, 24, layer="met3", snap=False)
     fp.place_wires(["vccd1"], 2911.7, 3148.92, 0, 0, 8.3, 24, layer="met3", snap=False)
-    fp.place_wires(["vccd1"], 2904.09, 2704, 0, 0, 15.91, 518.92, layer="met4", snap=False)
-    fp.place_wires(["vccd1"], 2904.09, 2680, 0, 0, 7.73, 24, layer="met4", snap=False)
+    fp.place_wires(["vccd1"], 2904.09, 2904, 0, 0, 15.91, 318.92, layer="met4", snap=False)
+    fp.place_wires(["vccd1"], 2904.09, 2880, 0, 0, 7.73, 24, layer="met4", snap=False)
     # VSSA1
     fp.place_wires(["vssa1"], 2862.29, 684.15, 0, 0, 49.41, 24, layer="met3", snap=False)
     fp.place_wires(["vssa1"], 2862.29, 734.15, 0, 0, 49.41, 24, layer="met3", snap=False)
-    fp.place_wires(["vssa1"], 2862.29, 684.15, 0, 0, 38.5, 2019.85, layer="met4", snap=False)
+    fp.place_wires(["vssa1"], 2862.29, 684.15, 0, 0, 38.5, 2219.85, layer="met4", snap=False)
     # VDDA1
     fp.place_wires(["vdda1"], 2820.49, 1126.15, 0, 0, 91.21, 24, layer="met3", snap=False)
     fp.place_wires(["vdda1"], 2820.49, 1176.15, 0, 0, 91.21, 24, layer="met3", snap=False)
-    fp.place_wires(["vdda1"], 2820.49, 1126.15, 0, 0, 38.5, 1577.85, layer="met4", snap=False)
+    fp.place_wires(["vdda1"], 2820.49, 2702.81, 0, 0, 91.21, 24, layer="met3", snap=False)
+    fp.place_wires(["vdda1"], 2820.49, 2752.81, 0, 0, 91.21, 24, layer="met3", snap=False)
+    fp.place_wires(["vdda1"], 2820.49, 1126.15, 0, 0, 38.5, 1777.85, layer="met4", snap=False)
     # VSSD2
     fp.place_wires(["vssd2"], 8.3, 814.44, 0, 0, 60.69, 24, layer="met3", snap=False)
     fp.place_wires(["vssd2"], 8.3, 864.44, 0, 0, 60.69, 24, layer="met3", snap=False)
-    fp.place_wires(["vssd2"], 30.49, 814.44, 0, 0, 38.5, 1889.56, layer="met4", snap=False)
+    fp.place_wires(["vssd2"], 30.49, 814.44, 0, 0, 38.5, 2089.56, layer="met4", snap=False)
     # VDDA2
     fp.place_wires(["vdda2"], 8.3, 1024.44, 0, 0, 102.49, 24, layer="met3", snap=False)
     fp.place_wires(["vdda2"], 8.3, 1074.44, 0, 0, 102.49, 24, layer="met3", snap=False)
-    fp.place_wires(["vdda2"], 72.29, 1024.44, 0, 0, 38.5, 1679.56, layer="met4", snap=False)
+    fp.place_wires(["vdda2"], 72.29, 1024.44, 0, 0, 38.5, 1879.56, layer="met4", snap=False)
+    # VSSA2
+    fp.place_wires(["vssa2"], 8.3, 2747.21, 0, 0, 150.69, 24, layer="met3", snap=False)
+    fp.place_wires(["vssa2"], 8.3, 2797.21, 0, 0, 150.69, 24, layer="met3", snap=False)
+    fp.place_wires(["vssa2"], 120.49, 2747.21, 0, 0, 38.5, 156.79, layer="met4", snap=False)
 
-    fp.insert_vias(nets=["vssd1", "vccd1", "vdda1", "vssa1", "vdda2", "vssd2"])
+    fp.insert_vias(nets=["vssd1", "vccd1", "vdda1", "vssa1", "vdda2", "vssa2", "vssd2"])
 
 def generate_core_floorplan(chip):
     fp = Floorplan(chip)
@@ -238,29 +244,32 @@ def analog_floorplan(fp, core):
 
     pins = [
         # Net name, vector width (0=scalar)
-        ("analog_la_out", 30),
-        ("analog_la_in", 30)
+        ("analog_la_out", 0, 9),
+        ("analog_la_in", 4, 23),
+        ("analog_la_out", 10, 29),
+        ("analog_la_in", 0, 3),
+        ("analog_la_in", 24, 29)
     ]
     pin_width = 0.56
     pin_depth = 2
     pin_layer = "met3"
     pin_y = 0
     pin_x = 100
-    pin_x_end = 1900
+    pin_x_end = 2560
     pin_count = 0
-    for (_, bit_width) in pins:
-        if bit_width == 0:
-            pin_count = pin_count + 1
-        else:
-            pin_count = pin_count + bit_width
-    pin_step = round((pin_x_end - pin_x) / (pin_count - 1))
-    for (pin_name, bit_width) in pins:
-        if bit_width == 0:
+    for (_, bit_start, bit_end) in pins:
+        bit_width = abs(bit_end - bit_start) + 1
+        pin_count = pin_count + bit_width
+    print(f"Found {pin_count} pins.")
+    #pin_step = round((pin_x_end - pin_x) / (pin_count - 1))
+    pin_step = 27
+    for (pin_name, bit_start, bit_end) in pins:
+        if bit_start == bit_end == 0:
             #fp.place_pins([pin_name], pin_x, pin_y, 0, 0, pin_width, pin_depth, pin_layer)
-            place_pin(fp, name, pin_x, pin_y, pin_width, pin_depth, pin_layer, drawing = not core)
+            place_pin(fp, pin_name, pin_x, pin_y, pin_width, pin_depth, pin_layer, drawing = not core)
             pin_x = pin_x + pin_step
         else:
-            for i in range(bit_width):
+            for i in range(bit_start, bit_end + 1):
                 name = f"{pin_name}[{i}]"
                 #fp.place_pins([name], pin_x, pin_y, 0, 0, pin_width, pin_depth, pin_layer)
                 place_pin(fp, name, pin_x, pin_y, pin_width, pin_depth, pin_layer, drawing = not core)
@@ -276,10 +285,10 @@ def generate_analog_floorplan():
     # Import additional pins from analog user wrapper
     fp_ep = Floorplan(analog_chip)
     analog_floorplan(fp_ep, False)
-    fp_ep.place_blockage(TOP_W - 100, 0, 100, 300, layer="met1")
-    fp_ep.place_blockage(TOP_W - 100, 0, 100, 300, layer="met2")
-    fp_ep.place_blockage(TOP_W - 100, 100, 100, 200, layer="met3")
-    fp_ep.place_blockage(TOP_W - 15, 0, 15, 530, layer="met4")
+    # fp_ep.place_blockage(TOP_W - 100, 0, 100, 300, layer="met1")
+    # fp_ep.place_blockage(TOP_W - 100, 0, 100, 300, layer="met2")
+    # fp_ep.place_blockage(TOP_W - 100, 100, 100, 200, layer="met3")
+    # fp_ep.place_blockage(TOP_W - 15, 0, 15, 330, layer="met4")
     pins = load_lef("user_analog_project_wrapper_empty.lef")
     for pin in pins:
         if (pin["y"] > ANALOG_Y * 1000):
@@ -303,6 +312,7 @@ def generate_analog_floorplan():
                     add_port = False)
     fp_ep.place_pins(["vdda2"], 30.49, 0, 0, 0, 38.5, 4, "met4")
     fp_ep.place_pins(["vssd2"], 72.29, 0, 0, 0, 38.5, 4, "met4")
+    fp_ep.place_pins(["vssa2"], 120.49, 0, 0, 0, 38.5, 4, "met4")
     fp_ep.place_pins(["vdda1"], 2820.49, 0, 0, 0, 38.5, 4, "met4")
     fp_ep.place_pins(["vssa1"], 2862.29, 0, 0, 0, 38.5, 4, "met4")
     fp_ep.write_def("analog_area/analog_area_with_external_pins.def")

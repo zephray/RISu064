@@ -28,22 +28,25 @@ from floorplan import core_floorplan, generate_core_floorplan, load_lib
 # Path to 'caravel' repository root.
 CARAVEL_ROOT = '/home/wenting/caravel'
 
+process = 'skywater130b'
+libname = 'sky130bhd'
+
 def configure_chip(design):
     # Minimal Chip object construction.
     chip = Chip(design)
-    chip.load_target('skywater130_demo')
+    chip.load_target('skywater130b_demo')
 
     # Customize tapcell script
     stackup = chip.get('asic', 'stackup')
     libtype = 'unithd'
-    chip.set('pdk', 'skywater130', 'aprtech','openroad', stackup, libtype,'tapcells', 'tapcell_custom.tcl')
+    chip.set('pdk', process, 'aprtech','openroad', stackup, libtype,'tapcells', 'tapcell_custom.tcl')
 
     # Layer resources adjustments
-    chip.set('pdk', 'skywater130', 'grid', stackup, 'met1', 'adj', 0.2)
-    chip.set('pdk', 'skywater130', 'grid', stackup, 'met2', 'adj', 0.2)
-    chip.set('pdk', 'skywater130', 'grid', stackup, 'met3', 'adj', 0.1)
-    chip.set('pdk', 'skywater130', 'grid', stackup, 'met4', 'adj', 0.1)
-    chip.set('pdk', 'skywater130', 'grid', stackup, 'met5', 'adj', 0.1)
+    chip.set('pdk', process, 'grid', stackup, 'met1', 'adj', 0.2)
+    chip.set('pdk', process, 'grid', stackup, 'met2', 'adj', 0.2)
+    chip.set('pdk', process, 'grid', stackup, 'met3', 'adj', 0.1)
+    chip.set('pdk', process, 'grid', stackup, 'met4', 'adj', 0.1)
+    chip.set('pdk', process, 'grid', stackup, 'met5', 'adj', 0.1)
 
     chip.set('option', 'relax', True)
     return chip
@@ -57,7 +60,7 @@ def build():
     core_chip.set('tool', 'openroad', 'var', 'floorplan', '0', 'pin_thickness_h', ['2'])
     core_chip.set('tool', 'openroad', 'var', 'floorplan', '0', 'pin_thickness_v', ['2'])
     #core_chip.set('tool', 'openroad', 'var', 'floorplan', '0', 'macro_place_halo', ['50'])
-    core_chip.set('tool', 'openroad', 'var', 'place', '0', 'place_density', ['0.52'])
+    core_chip.set('tool', 'openroad', 'var', 'place', '0', 'place_density', ['0.45'])
     #core_chip.set('tool', 'openroad', 'var', 'place', '0', 'pad_global_place', ['16'])
     #core_chip.set('tool', 'openroad', 'var', 'place', '0', 'pad_detail_place', ['12'])
     core_chip.set('tool', 'openroad', 'var', 'route', '0', 'grt_allow_congestion', ['true'])
@@ -70,6 +73,7 @@ def build():
 
     core_chip.set('input', 'verilog', 'caravel_defines.v')
     core_chip.add('input', 'verilog', 'user_analog_project_wrapper.v')
+    core_chip.add('input', 'verilog', 'therm_out.v')
     core_chip.add('input', 'verilog', '../rtl/asictop.v')
     core_chip.add('input', 'verilog', '../rtl/risu.v')
     core_chip.add('input', 'verilog', '../rtl/basic/fifo_1d_22to64.v')
@@ -135,14 +139,14 @@ def build():
     core_chip.set('asic', 'maxlayer', 'met4')
 
     # Set filler cells in the top-level wrapper.
-    core_chip.set('library', 'sky130hd', 'asic', 'cells', 'filler', [
+    core_chip.set('library', libname, 'asic', 'cells', 'filler', [
             'sky130_fd_sc_hd__fill_1',
             'sky130_fd_sc_hd__fill_2',
             'sky130_fd_sc_hd__decap_3',
             'sky130_fd_sc_hd__decap_4',
             'sky130_fd_sc_hd__decap_6',
             'sky130_fd_sc_hd__decap_8',
-            'sky130_fd_sc_hd__decap_12'])
+            'sky130_ef_sc_hd__decap_12'])
 
     # Configure core-level PDN script.
     pdk = core_chip.get('option', 'pdk')

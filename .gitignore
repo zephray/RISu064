@@ -6,4 +6,6 @@ simulator
 *.bin
 *.elf
 *.dump
-
+*.d
+*.o
+*.log

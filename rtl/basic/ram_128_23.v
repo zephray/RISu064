@@ -55,19 +55,19 @@ module ram_128_23(
         .csb0(!we),
         .web0(!we),
         .wmask0(4'hF),
-        .addr0(waddr),
+        .addr0({1'b0, waddr}),
         .din0(sram_wr),
         .dout0(),
         .clk1(clk),
         .csb1(!re),
-        .addr1(raddr),
+        .addr1({1'b0, raddr}),
         .dout1(sram_rd)
     );
     assign rd = sram_rd[22:0];
     assign sram_wr = {9'd0, wr};
 `else
-    reg [23:0] mem [0:127];
-    reg [23:0] rd_reg;
+    reg [22:0] mem [0:127];
+    reg [22:0] rd_reg;
 
     always @(posedge clk) begin
         if (!rst) begin

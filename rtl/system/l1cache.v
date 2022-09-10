@@ -32,6 +32,7 @@ module l1cache(
     input  wire         core_req_wen,
     input  wire [63:0]  core_req_wdata,
     input  wire [7:0]   core_req_wmask,
+    input  wire         core_req_cache,
     output wire         core_req_ready,
     input  wire         core_req_valid,
     output wire [63:0]  core_resp_rdata,
@@ -46,11 +47,18 @@ module l1cache(
     input  wire         mem_req_ready,
     input  wire [63:0]  mem_resp_rdata,
     input  wire         mem_resp_valid,
-    output reg          mem_resp_ready
+    output reg          mem_resp_ready,
+    // Maintenance request
+    input  wire         invalidate_req,
+    output reg          invalidate_resp,
+    input  wire         flush_req,
+    output reg          flush_resp
     );
 
     // Registered for 2nd-stage of pipeline
+    /* verilator lint_off UNUSED */
     reg [31:0]  p2_core_req_addr;
+    /* verilator lint_on UNUSED */
     reg         p2_core_req_wen;
     reg [63:0]  p2_core_req_wdata;
     reg [7:0]   p2_core_req_wmask;
@@ -79,8 +87,10 @@ module l1cache(
     //   Write, cache miss: 5 cylces + memory read latency
     //   Write, cache miss + flush: 13 cycles + 2x memory latency
 
-    // The interface to L2 is a TL-UH interface
-    // It would only issue Get / PutFullData with burst length of 4.
+    // The interface to L2 is an K-Link interface. The burst length is either
+    // cache line length (cached access) or data bus width (non-cached access)
+
+    // Flush doesn't invalidate cache, and invalidate doesn't flush cache
 
     localparam CACHE_WAY = 2; // This shouldn't be changed
     localparam CACHE_WAY_BITS = 1; // This shouldn't be changed
@@ -106,13 +116,18 @@ module l1cache(
     localparam BIT_LRU = BIT_VALID + 1;
 
     // 1st pipeline stage
+    
+    /* verilator lint_off UNUSED */
     wire [CACHE_ADDR_BITS-1:0] core_dw_addr = core_req_addr[31:3];
+    /* verilator lint_on UNUSED */
     wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr =
             core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
     wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr_keep =
             p2_core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
-    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr_mux = (cache_int_ready) ?
-            cache_meta_raddr : cache_meta_raddr_keep;
+    wire [CACHE_BLOCK_ABITS-1:0] cache_meta_raddr_mux =
+            cache_int_ready ? cache_meta_raddr :
+            invalidate_flush_en ? invalidate_flush_counter :
+            cache_meta_raddr_keep;
 
     wire p2_cache_comparator [0:CACHE_WAY-1];
 
@@ -123,34 +138,26 @@ module l1cache(
     wire [CACHE_LINE_DBITS-1:0] p2_cache_data_wr [0:CACHE_WAY-1];
     wire                        p2_cache_data_we [0:CACHE_WAY-1];
 
-    // Adapt to use standard 24-bit memory
-    wire [23:0] meta_sram_rd [0:CACHE_WAY-1];
-    wire [23:0] meta_sram_wr [0:CACHE_WAY-1];
-
     genvar i, j;
     generate
     for (i = 0; i < CACHE_WAY; i = i + 1) begin: cache_ram
         `ifdef CACHE_META_RAM_PRIM
         `CACHE_META_RAM_PRIM cache_meta(
         `else
-        ram_generic_1rw1r #(.DBITS(24), .ABITS(CACHE_BLOCK_ABITS)) cache_meta(
+        ram_generic_1rw1r #(.DBITS(CACHE_LEN_TOTAL), .ABITS(CACHE_BLOCK_ABITS)) cache_meta(
         `endif
             .clk(clk),
             .rst(rst),
             .raddr(cache_meta_raddr_mux),
         // 2nd pipeline stage (after 1-cycle RAM)
             // Read has 1 cycle delay
-            .rd(meta_sram_rd[i]),
+            .rd(p2_cache_meta_rd[i]),
             .re(1'b1),
             // Write happens after read, thus in p2
             .waddr(p2_cache_meta_waddr_mux),
             .we(p2_cache_meta_we[i]),
-            .wr(meta_sram_wr[i])
+            .wr(p2_cache_meta_wr[i])
         );
-
-        assign p2_cache_meta_rd[i] = meta_sram_rd[i][CACHE_LEN_TOTAL-1:0];
-        assign meta_sram_wr[i][23:CACHE_LEN_TOTAL] = 0;
-        assign meta_sram_wr[i][CACHE_LEN_TOTAL-1:0] = p2_cache_meta_wr[i];
 
         `ifdef CACHE_DATA_RAM_PRIM
         `CACHE_DATA_RAM_PRIM cache_data(
@@ -176,14 +183,18 @@ module l1cache(
     wire [CACHE_TAG_BITS-1:0]  p2_addr_tag =
             p2_core_dw_addr[CACHE_ADDR_BITS-1:CACHE_LINE_ABITS];
 
+    // Uncached support
+    reg [7:0] uncached_req_wmask;
+    reg [63:0] uncached_req_wdata;
+
     // Support invalidate request
-    reg invalidate_en;
-    reg [CACHE_BLOCK_ABITS-1:0] invalidate_counter;
+    reg invalidate_flush_en;
+    reg [CACHE_BLOCK_ABITS-1:0] invalidate_flush_counter;
     wire [CACHE_BLOCK_ABITS-1:0] p2_cache_meta_waddr_mux;
     wire [CACHE_BLOCK_ABITS-1:0] p2_cache_meta_waddr =
             p2_core_dw_addr[CACHE_LINE_ABITS-1:CACHE_LINE_IN_BLOCK_ABITS];
-    assign p2_cache_meta_waddr_mux = (invalidate_en) ? invalidate_counter :
-            p2_cache_meta_waddr;
+    assign p2_cache_meta_waddr_mux = invalidate_flush_en ?
+            invalidate_flush_counter : p2_cache_meta_waddr;
 
     // Sequential reload data array
     wire reload_en = !cache_int_ready && (cache_state != STATE_RETRY);
@@ -214,13 +225,15 @@ module l1cache(
     wire [CACHE_LEN_TOTAL-1:0] cache_meta_core_wb [0:CACHE_WAY-1];
     wire [CACHE_LEN_TOTAL-1:0] cache_meta_mem_wb [0:CACHE_WAY-1];
     wire [CACHE_LEN_TOTAL-1:0] cache_meta_flush_wb [0:CACHE_WAY-1];
+    wire [CACHE_LEN_TOTAL-1:0] cache_meta_invalidate_wb [0:CACHE_WAY-1];
 
     wire [CACHE_LINE_DBITS-1:0] cache_data_core_wb [0:CACHE_WAY-1];
     wire [CACHE_LINE_DBITS-1:0] cache_data_mem_wb = mem_resp_rdata;
 
-    localparam CACHE_WB_CORE  = 2'd0;
-    localparam CACHE_WB_MEM   = 2'd1;
+    localparam CACHE_WB_CORE = 2'd0;
+    localparam CACHE_WB_MEM = 2'd1;
     localparam CACHE_WB_FLUSH = 2'd2;
+    localparam CACHE_WB_INVALIDATE = 2'd3;
     reg [1:0] cache_way_wb_src;
 
     generate
@@ -241,14 +254,22 @@ module l1cache(
         assign cache_meta_mem_wb[i][BIT_LRU] = cache_way_updated_lru[i];
 
         // Write-back value for flush
-        assign cache_meta_flush_wb[i][CACHE_LEN_TOTAL-1:0] =
+        assign cache_meta_flush_wb[i][BIT_TAG_END:BIT_TAG_START] =
+                p2_cache_meta_rd[i][BIT_TAG_END:BIT_TAG_START];
+        assign cache_meta_flush_wb[i][BIT_VALID] = 1'b1;
+        assign cache_meta_flush_wb[i][BIT_DIRTY] = 1'b0;
+        assign cache_meta_flush_wb[i][BIT_LRU] = p2_cache_meta_rd[i][BIT_LRU];
+
+        // Write-back value for invalidate
+        assign cache_meta_invalidate_wb[i][CACHE_LEN_TOTAL-1:0] =
                 {(CACHE_LEN_TOTAL){1'b0}};
 
         // Select cache way writeback
         assign p2_cache_meta_wr[i] =
-                (cache_way_wb_src == CACHE_WB_CORE) ? (cache_meta_core_wb[i]) :
-                (cache_way_wb_src == CACHE_WB_MEM) ? (cache_meta_mem_wb[i]) :
-                (cache_meta_flush_wb[i]);
+                (cache_way_wb_src == CACHE_WB_CORE) ? cache_meta_core_wb[i] :
+                (cache_way_wb_src == CACHE_WB_MEM) ? cache_meta_mem_wb[i] :
+                (cache_way_wb_src == CACHE_WB_FLUSH) ? cache_meta_flush_wb[i] :
+                cache_meta_invalidate_wb[i];
         
         // DATA mem
         // Could be removed if DATA memory array supports byte masking
@@ -281,7 +302,7 @@ module l1cache(
 
     reg [3: 0] cache_state;
     
-    // Cache hit takes 2 cycles
+    // Cache hit take 1 cycles
     localparam STATE_RESET = 4'd0;      // State after reset
     localparam STATE_PREPARE = 4'd1;
     localparam STATE_READY = 4'd2;
@@ -290,6 +311,11 @@ module l1cache(
     localparam STATE_WAY_WB = 4'd5;
     localparam STATE_RETRY = 4'd6;
     localparam STATE_FLUSH_WAIT_ACK = 4'd7;
+    localparam STATE_UNCACHED_REQ = 4'd8;
+    localparam STATE_INVALIDATE = 4'd9;
+    localparam STATE_BULK_FLUSH_MEMREQ = 4'd10;
+    localparam STATE_BULK_FLUSH_MEMRESP = 4'd11;
+    localparam STATE_BULK_FLUSH_WAIT = 4'd12;
 
     // Combinational path for 1-cycle hit
     wire p2_core_resp_valid = (p2_cache_comparator[0] || p2_cache_comparator[1])
@@ -301,8 +327,10 @@ module l1cache(
     assign cache_int_ready =
             ((cache_state == STATE_PREPARE) || (cache_state == STATE_READY)) &&
             !p2_cache_miss;
-    assign core_resp_rdata = cache_int_ready ? (p2_core_resp_rdata) : (64'bx);
-    assign core_resp_valid = cache_int_ready ? (p2_core_resp_valid) : (1'b0);
+    reg [63:0] cache_int_resp_rdata;
+    reg cache_int_resp_valid;
+    assign core_resp_rdata = cache_int_ready ? p2_core_resp_rdata : cache_int_resp_rdata;
+    assign core_resp_valid = cache_int_ready ? p2_core_resp_valid : cache_int_resp_valid;
 
     // LRU policy:
     // For every line, both way have its own LRU bit. Both bits are read out
@@ -316,10 +344,13 @@ module l1cache(
     // When way 0 need to be newer, it set itself to be the same as way 1's LRU bit 
     // When way 1 need to be newer, it set itself to be different as way 0's LRU bit
     
+    reg flush_way;
     wire cache_lru_way_0_newer =
             p2_cache_meta_rd[0][BIT_LRU] == p2_cache_meta_rd[1][BIT_LRU];
     wire cache_lru_way_1_newer = !cache_lru_way_0_newer;
-    wire cache_victim = (cache_lru_way_1_newer) ? 1'b0 : 1'b1;
+    wire cache_victim = 
+            ((cache_state == STATE_BULK_FLUSH_MEMREQ) || (cache_state == STATE_BULK_FLUSH_MEMRESP)) ?
+            (flush_way) : ((cache_lru_way_1_newer) ? 1'b0 : 1'b1);
 
     wire [31:0] cache_flush_mem_addr =
             {p2_cache_meta_rd[cache_victim][BIT_TAG_END: BIT_TAG_START],
@@ -332,10 +363,10 @@ module l1cache(
         case (cache_state)
         /* verilator lint_on CASEINCOMPLETE */
         STATE_RESET: begin
-            cache_meta_we_reg[0] <= 1'b1;
-            cache_meta_we_reg[1] <= 1'b1;
-            invalidate_counter <= invalidate_counter-1;
-            if (invalidate_counter == 8'd0) begin
+            invalidate_flush_counter <= invalidate_flush_counter + 1;
+            /* verilator lint_off WIDTH */
+            if (invalidate_flush_counter == CACHE_BLOCK - 1) begin
+            /* verilator lint_on WIDTH */
                 cache_state <= STATE_PREPARE;
             end
         end
@@ -348,13 +379,41 @@ module l1cache(
             p2_core_req_wdata <= core_req_wdata;
             p2_core_req_wmask <= core_req_wmask;
             p2_core_req_valid <= core_req_valid;
+            cache_int_resp_valid <= 1'b0;
+            invalidate_resp <= 1'b0;
+            flush_resp <= 1'b0;
             cache_state <= STATE_READY;
         end
         STATE_READY: begin
-            invalidate_en <= 1'b0;
+            invalidate_flush_en <= 1'b0;
             // At this state, way_we and core_resp_rdata / resp_valid
             // are supplied by combinational logic for 1-cycle hit.
-            if (p2_cache_miss) begin
+            if (invalidate_req) begin
+                cache_meta_we_reg[0] <= 1'b1;
+                cache_meta_we_reg[1] <= 1'b1;
+                cache_way_wb_src <= CACHE_WB_INVALIDATE;
+                invalidate_flush_counter <= 0;
+                invalidate_flush_en <= 1'b1;
+                cache_state <= STATE_INVALIDATE;
+            end
+            else if (flush_req) begin
+                cache_way_wb_src <= CACHE_WB_FLUSH;
+                invalidate_flush_counter <= 0;
+                invalidate_flush_en <= 1'b1;
+                reload_counter <= 0;
+                flush_way <= 1'b0;
+                cache_state <= STATE_BULK_FLUSH_WAIT;
+            end
+            else if (core_req_valid && core_req_ready && !core_req_cache) begin
+                mem_req_wen <= core_req_wen;
+                mem_req_addr <= core_req_addr;
+                mem_req_valid <= 1'b1;
+                mem_resp_ready <= 1'b1;
+                uncached_req_wdata <= core_req_wdata;
+                uncached_req_wmask <= core_req_wmask;
+                cache_state <= STATE_UNCACHED_REQ;
+            end
+            else if (p2_cache_miss) begin
                 // Requested but miss
                 // Check if the cache line needed to be flushed before RW
                 if (p2_cache_meta_rd[cache_victim][BIT_VALID] &&
@@ -451,29 +510,119 @@ module l1cache(
         end
         STATE_RETRY: begin
             // Essentially a wait state
+            cache_int_resp_valid <= 1'b0;
             cache_state <= STATE_READY;
+        end
+        STATE_UNCACHED_REQ: begin
+            if (mem_req_ready)
+                mem_req_valid <= 1'b0;
+
+            if (mem_resp_valid) begin
+                mem_resp_ready <= 1'b0;
+                cache_int_resp_rdata <= mem_resp_rdata;
+                cache_int_resp_valid <= 1'b1;
+                cache_state <= STATE_RETRY;
+            end
+        end
+        STATE_INVALIDATE: begin
+            invalidate_flush_counter <= invalidate_flush_counter + 1;
+            /* verilator lint_off WIDTH */
+            if (invalidate_flush_counter == CACHE_BLOCK - 1) begin
+            /* verilator lint_on WIDTH */
+                cache_state <= STATE_PREPARE;
+                invalidate_resp <= 1'b1;
+            end
+        end
+        STATE_BULK_FLUSH_MEMREQ: begin
+            cache_meta_we_reg[0] <= 1'b0;
+            cache_meta_we_reg[1] <= 1'b0;
+            if (p2_cache_meta_rd[cache_victim][BIT_VALID] &&
+                        p2_cache_meta_rd[cache_victim][BIT_DIRTY]) begin
+                mem_req_wen <= 1'b1;
+                mem_req_addr <= cache_flush_mem_addr;
+                mem_req_valid <= 1'b1;
+                if (mem_req_ready) begin
+                    // Data in last beat has been accepted, continue to next beat
+                    reload_counter <= reload_counter + 1;
+                    /* verilator lint_off WIDTH */
+                    if (reload_counter == (CACHE_LINE_IN_BLOCK - 1)) begin
+                    /* verilator lint_on WIDTH */
+                        // Writeback finished, waiting for acknowledge from L2
+                        cache_state <= STATE_BULK_FLUSH_MEMRESP;
+                        cache_meta_we_reg[cache_victim] <= 1'b1;
+                        mem_resp_ready <= 1'b1;
+                    end
+                end
+            end
+            else begin
+                invalidate_flush_counter <= invalidate_flush_counter + 1;
+                cache_state <= STATE_BULK_FLUSH_WAIT;
+                /* verilator lint_off WIDTH */
+                if (invalidate_flush_counter == CACHE_BLOCK - 1) begin
+                /* verilator lint_on WIDTH */
+                    if (flush_way == 1'b0) begin
+                        flush_way <= 1'b1;
+                    end
+                    else begin
+                        cache_state <= STATE_PREPARE;
+                        flush_resp <= 1'b1;
+                    end
+                end
+            end
+        end
+        STATE_BULK_FLUSH_MEMRESP: begin
+            mem_req_valid <= 1'b0;
+            cache_meta_we_reg[0] <= 1'b0;
+            cache_meta_we_reg[1] <= 1'b0;
+            if (mem_resp_valid) begin
+                mem_resp_ready <= 1'b0;
+                reload_counter <= 0;
+                invalidate_flush_counter <= invalidate_flush_counter + 1;
+                cache_state <= STATE_BULK_FLUSH_WAIT;
+                /* verilator lint_off WIDTH */
+                if (invalidate_flush_counter == CACHE_BLOCK - 1) begin
+                /* verilator lint_on WIDTH */
+                    if (flush_way == 1'b0) begin
+                        flush_way <= 1'b1;
+                    end
+                    else begin
+                        cache_state <= STATE_PREPARE;
+                        flush_resp <= 1'b1;
+                    end
+                end
+            end
+        end
+        STATE_BULK_FLUSH_WAIT: begin
+            cache_state <= STATE_BULK_FLUSH_MEMREQ;
         end
         endcase
 
         if (rst) begin
             cache_state <= STATE_RESET;
             mem_resp_ready <= 1'b0;
-            cache_meta_we_reg[0] <= 1'b0;
-            cache_meta_we_reg[1] <= 1'b0;
+            cache_meta_we_reg[0] <= 1'b1;
+            cache_meta_we_reg[1] <= 1'b1;
             cache_data_we_reg[0] <= 1'b0;
             cache_data_we_reg[1] <= 1'b0;
-            cache_way_wb_src <= CACHE_WB_FLUSH;
+            cache_way_wb_src <= CACHE_WB_INVALIDATE;
             /* verilator lint_off WIDTH */
-            invalidate_counter <= CACHE_BLOCK - 1;
+            invalidate_flush_counter <= 0;
             /* verilator lint_on WIDTH */
-            invalidate_en <= 1'b1;
+            invalidate_flush_en <= 1'b1;
             p2_core_req_valid <= 1'b0;
+            cache_int_resp_valid <= 1'b0;
+            invalidate_resp <= 1'b0;
+            flush_resp <= 1'b0;
         end
     end
     
     // Tieoff fixed outputs
-    assign mem_req_size = 3'd5; // 2^5 = 32 byte / 4 beats on 64-bit bus
-    assign mem_req_wmask = 8'hFF;
-    assign mem_req_wdata = p2_cache_data_rd[cache_victim];
+    assign mem_req_size = (cache_state == STATE_UNCACHED_REQ) ?
+        3'd3 : // Fixed 64-bit
+        3'd5; // 2^5 = 32 byte / 4 beats on 64-bit bus
+    assign mem_req_wmask = (cache_state == STATE_UNCACHED_REQ) ?
+        uncached_req_wmask : 8'hFF;
+    assign mem_req_wdata = (cache_state == STATE_UNCACHED_REQ) ?
+        uncached_req_wdata : p2_cache_data_rd[cache_victim];
 
 endmodule

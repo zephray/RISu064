@@ -110,6 +110,7 @@ module risu(
         .core_req_wen(1'b0),
         .core_req_wdata(64'bx),
         .core_req_wmask(8'bx),
+        .core_req_cache(1'b1),
         .core_req_ready(im_req_ready),
         .core_req_valid(im_req_valid),
         .core_resp_rdata(im_resp_rdata),
@@ -125,7 +126,13 @@ module risu(
         .mem_req_ready(ib_req_ready),
         .mem_resp_rdata(ib_resp_rdata),
         .mem_resp_valid(ib_resp_valid),
-        .mem_resp_ready(ib_resp_ready)
+        .mem_resp_ready(ib_resp_ready),
+        .invalidate_req(im_invalidate_req),
+        .invalidate_resp(im_invalidate_resp),
+        .flush_req(1'b0),
+        /* verilator lint_off PINCONNECTEMPTY */
+        .flush_resp()
+        /* verilator lint_on PINCONNECTEMPTY */
     );
 
     l1cache l1d(
@@ -135,6 +142,7 @@ module risu(
         .core_req_wen(dm_req_wen),
         .core_req_wdata(dm_req_wdata),
         .core_req_wmask(dm_req_wmask),
+        .core_req_cache(dm_req_addr[31]), // Only high 2GB are cached
         .core_req_ready(dm_req_ready),
         .core_req_valid(dm_req_valid),
         .core_resp_rdata(dm_resp_rdata),
@@ -148,7 +156,13 @@ module risu(
         .mem_req_ready(db_req_ready),
         .mem_resp_rdata(db_resp_rdata),
         .mem_resp_valid(db_resp_valid),
-        .mem_resp_ready(db_resp_ready)
+        .mem_resp_ready(db_resp_ready),
+        .invalidate_req(1'b0),
+        /* verilator lint_off PINCONNECTEMPTY */
+        .invalidate_resp(),
+        /* verilator lint_on PINCONNECTEMPTY */
+        .flush_req(dm_flush_req),
+        .flush_resp(dm_flush_resp)
     );
     `else
     assign ib_req_addr = im_req_addr;

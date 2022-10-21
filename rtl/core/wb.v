@@ -279,6 +279,9 @@ module wb(
     always @(posedge clk) begin
         begin
             $display("TIME: %0t", $time);
+            if (!wb1_active && (wb1_src == WB_SRC_BUF) && (wb1_dst && wb0_dst)) begin
+                $display("PC %016x WB [%d] <- %016x", wb1_pc, wb1_dst, wb1_value);
+            end
             if (wb0_active) begin
                 $display("PC %016x WB [%d] <- %016x", wb0_pc, wb0_dst, wb0_value);
             end

@@ -790,7 +790,9 @@ module ix(
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end
-        else if (exc_pending) begin
+        // But this is affected by pipe flush. If the pipeline is being flushed,
+        // Not handled exceptions are not valid
+        else if (exc_pending && !pipe_flush) begin
             ix_trap_pc <= lsp_fault ? lsp_unaligned_epc : mmu_fault_epc;
             ix_trap_mret <= 1'b0;
             ix_trap_int <= 1'b1;
@@ -803,7 +805,7 @@ module ix(
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end
-        else if (int_pending) begin
+        else if (int_pending && !pipe_flush) begin
             // Respond to interrupt
             ix_trap_pc <= dec0_ix_pc;
             //ix_trap_dst <= 5'bx;

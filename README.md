@@ -79,6 +79,18 @@ To run coremark, build the coremark by running ```make``` in tests/coremark, the
 
 Note: Verilator required for building the simulator. RV64 gcc (riscv64-unknown-elf-gcc) required for building the coremark.
 
+## Debugging RTL
+
+The core implementation probably contains bugs. Due to its OoO WB without reordering design, the core's architectural state would often diverge from ISA model, making lock-step co-simulation or trace comparsion with ISA simulation hard. A trace comparison tool is provided to allow comparing between RTL simulator generated trace and Spike generated trace. Example usage:
+
+```
+spike -m0x20000000:4096,0x80000000:1048576 -l --log-commits tests/coremark/coremark.elf 2> spike.log
+sim/simulator --ram tests/coremark/coremark.bin --cycles 10000 > sim.log
+tests/trace_comparater.py --risu sim.log --spike spike.log
+```
+
+Differences (if any) will be reported.
+
 ## Acknowledgements
 
 During the design of this processor, I have used the following projects as reference:

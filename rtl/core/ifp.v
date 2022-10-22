@@ -496,10 +496,20 @@ module ifp(
         end
     end*/
 
+    reg last_stalled;
+    reg [63:0] pc_repeat;
+    always @(posedge clk) begin
+        last_stalled <= ifp_stalled;
+        pc_repeat <= next_pc;
+        if (rst)
+            last_stalled <= 1'b0;
+    end
+
     wire [63:0] pc_plus_4 = f1_f2_pc + 4;
     wire [63:0] aligned_pc_plus_8 = {f1_f2_pc[63:3], 3'b0} + 8;
     assign next_pc =
             (ifp_pc_override) ? (ifp_new_pc) : // mis-predict
+            (last_stalled) ? (pc_repeat) :
             (ras_hit_lo) ? (ras_result) :
             (f1_bp_lo) ? (btb_result_lo) :
             // If both are branch, and valid (PC aligned to 8, insn0 valid)

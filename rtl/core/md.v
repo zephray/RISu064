@@ -130,6 +130,7 @@ module md(
 
         if (rst) begin
             active <= 1'b0;
+            abort_requested <= 1'b0;
         end
     end
 

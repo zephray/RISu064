@@ -136,7 +136,7 @@ module lsp(
         if (ag_m_speculate && ag_abort)
             m_abort <= 1'b1;
 
-        if (lsp_dm_resp_valid && lsp_dm_resp_valid) begin
+        if (lsp_dm_resp_valid) begin
             m_abort <= 1'b0;
             lsp_ix_mem_busy <= 1'b0;
         end
@@ -163,6 +163,7 @@ module lsp(
             lsp_unaligned_load <= 1'b0;
             lsp_unaligned_store <= 1'b0;
             lsp_wb_valid <= 1'b0;
+            m_abort <= 1'b0;
         end
     end
 

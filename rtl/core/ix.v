@@ -696,6 +696,8 @@ module ix(
             ix_if_pc_override <= 1'b0;
             ix_if_new_pc <= 64'bx;
             ix_fencei_done <= 1'b0;
+            im_invalidate_req <= 1'b0;
+            dm_flush_req <= 1'b0;
         end
     end
 

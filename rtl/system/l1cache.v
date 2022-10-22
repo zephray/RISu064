@@ -599,6 +599,7 @@ module l1cache(
 
         if (rst) begin
             cache_state <= STATE_RESET;
+            mem_req_valid <= 1'b0;
             mem_resp_ready <= 1'b0;
             cache_meta_we_reg[0] <= 1'b1;
             cache_meta_we_reg[1] <= 1'b1;

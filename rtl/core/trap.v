@@ -215,11 +215,12 @@ module trap(
                     `else
                         trap_wb_result <= 64'd0;
                     `endif
+                        $display("Unknwon CSR");
                     end
                     endcase
                     if (((ix_trap_csr_id[9:8] == 2'b11) && !machine_csr_allowed) || 
                             ((ix_trap_csr_id[9:8] == 2'b01) && !supervisor_csr_allowed) ||
-                            ((ix_trap_csr_id[11:10] == 2'b11) && (csr_op != `CSR_RD))) begin
+                            ((ix_trap_csr_id[11:10] == 2'b11) && (ix_trap_csr_op != `CSR_RD))) begin
                         // Access CSR without appropriate priviledge level or
                         // writing to read-only CSRs raise illegal instruction
                         // exception.
@@ -231,6 +232,7 @@ module trap(
                         gmie <= 1'b0;
                         gmpie <= gmie;
                         state <= ST_IDLE;
+                        $display("Illegal CSR access");
                     end
                     $display("CSR read %x = %d", ix_trap_csr_id, trap_wb_result);
                 end

@@ -536,7 +536,7 @@ module ix(
             (!dec0_ix_wb_en || (
                 ((dec0_ix_rd != dec1_ix_rs1) || (dec1_ix_operand1 != `D_OPR1_RS1)) &&
                 ((dec0_ix_rd != dec1_ix_rs2) || (dec1_ix_operand2 != `D_OPR2_RS2)))) &&
-            (!dec0_is_branch || dec1_is_int || dec1_is_md || dec1_is_load);
+            (!dec0_is_branch || dec1_is_int || dec1_is_md);
     // Issue logic
 
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);

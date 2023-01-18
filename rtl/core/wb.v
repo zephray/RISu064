@@ -68,6 +68,7 @@ module wb(
     input  wire [63:0]  md_wb_result,
     /* verilator lint_off UNUSED */
     input  wire [63:0]  md_wb_pc,
+    input  wire         md_wb_wb_en,
     /* verilator lint_on UNUSED */
     input  wire         md_wb_valid,
     output wire         md_wb_ready,

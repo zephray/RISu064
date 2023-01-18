@@ -13,7 +13,7 @@ all: $(TARGET)
 
 VOBJ := obj_dir
 CXX   := g++
-FBDIR := ../rtl
+FBDIR := ../rtl/genrtl
 CPUS ?= $(shell bash -c 'nproc --all')
 VERBOSE ?= 0
 
@@ -26,7 +26,13 @@ VERILATOR := verilator
 else
 VERILATOR := $(VERILATOR_ROOT)/bin/verilator
 endif
-VFLAGS := -Wall -Wno-fatal -MMD --trace -cc -I../rtl -I../rtl/basic -I../rtl/bus -I../rtl/core -I../rtl/system -I../rtl/third_party
+VFLAGS := -Wall -Wno-fatal -MMD --trace -cc \
+		-I../rtl/genrtl \
+		-I../rtl/genrtl/basic \
+		-I../rtl/genrtl/bus \
+		-I../rtl/genrtl/core \
+		-I../rtl/genrtl/system \
+		-I../rtl/genrtl/third_party
 ifeq ($(VERBOSE), 1)
 VFLAGS += +define+VERBOSE=1
 endif

@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-`default_nettype none
 //
 // RISu64
 // Copyright 2022 Wenting Zhang
@@ -22,7 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`timescale 1ns / 1ps
 `include "defines.vh"
+`default_nettype none
+<% from risupylib import * %>
 
 // Integer pipeline
 // Pipeline latency = 1 cycle
@@ -30,51 +31,17 @@ module ip(
     input  wire         clk,
     input  wire         rst,
     // From issue
-    input  wire [63:0]  ix_ip_pc,
-    input  wire [4:0]   ix_ip_dst,
-    input  wire         ix_ip_wb_en,
-    input  wire [3:0]   ix_ip_op,
-    input  wire         ix_ip_option,
-    input  wire         ix_ip_truncate,
-    // Disable linting in case branching support is disabled
-    /* verilator lint_off UNUSED */
-    input  wire [1:0]   ix_ip_br_type,
-    input  wire         ix_ip_br_neg,
-    input  wire [63:0]  ix_ip_br_base,
-    input  wire [20:0]  ix_ip_br_offset,
-    input  wire         ix_ip_br_is_call,
-    input  wire         ix_ip_br_is_ret,
-    /* verilator lint_on UNUSED */
-    input  wire [63:0]  ix_ip_operand1,
-    input  wire [63:0]  ix_ip_operand2,
-    /* verilator lint_off UNUSED */
-    input  wire         ix_ip_bp,
-    input  wire [1:0]   ix_ip_bp_track,
-    input  wire [63:0]  ix_ip_bt,
-    /* verilator lint_on UNUSED */
-    input  wire         ix_ip_speculate,
-    input  wire         ix_ip_valid,
-    output wire         ix_ip_ready,
+    <% gen_port("ix_ip", reverse(handshake(ix_ip_t)), reg=False) %>
     // Forwarding path back to issue
     output wire [63:0]  ip_ix_forwarding,
     // To writeback
-    output reg  [4:0]   ip_wb_dst,
-    output reg  [63:0]  ip_wb_result,
-    output reg  [63:0]  ip_wb_pc,
-    output reg          ip_wb_wb_en,
+    <% gen_port("ip_wb", wb_t, reg=True) %>
     output wire         ip_wb_hipri,
-    output wire         ip_wb_valid,
+    output reg  [63:0]  ip_wb_pc,
     input  wire         ip_wb_ready,
     // To instruction fetch unit
     /* verilator lint_off UNDRIVEN */
-    output reg          ip_if_branch,
-    output reg          ip_if_branch_taken,
-    output reg  [63:0]  ip_if_branch_pc,
-    output reg          ip_if_branch_is_call,
-    output reg          ip_if_branch_is_ret,
-    output reg  [1:0]   ip_if_branch_track,
-    output reg          ip_if_pc_override,
-    output reg  [63:0]  ip_if_new_pc,
+    <% gen_port("ip_if", ip_if_t, reg=True) %>
     /* verilator lint_on UNDRIVEN */
     // Pipeline flush
     input  wire         ip_abort

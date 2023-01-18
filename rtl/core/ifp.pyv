@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-`default_nettype none
 //
 // RISu64
 // Copyright 2022 Wenting Zhang
@@ -22,8 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`timescale 1ns / 1ps
 `include "defines.vh"
 `include "options.vh"
+`default_nettype none
+<% from risupylib import * %>
 
 // Instruction fetching pipeline (dual issue)
 // Pipeline latency = 2 cycles: PCgen, Imem
@@ -31,29 +32,15 @@ module ifp(
     input  wire         clk,
     input  wire         rst,
     // I-mem interface
-    output wire [63:0]  if_im_req_addr,
-    output wire         if_im_req_valid,
-    input  wire         if_im_req_ready,
-    input  wire [63:0]  if_im_resp_rdata,
+    <% gen_port("if_im", romem_if_t, reg=False) %>
     input  wire         if_im_resp_page_fault,
-    input  wire         if_im_resp_valid,
     // Decoder interface
     // dec1 higher address
-    output wire [63:0]  if_dec1_pc,
-    output wire [31:0]  if_dec1_instr,
-    output wire         if_dec1_bp,
-    output wire [1:0]   if_dec1_bp_track,
-    output wire [63:0]  if_dec1_bt,
-    output wire         if_dec1_page_fault,
+    <% gen_port("if_dec1", if_dec_t, reg=False) %>
     output wire         if_dec1_valid,
     // dec0 lower address
-    output wire [63:0]  if_dec0_pc,
-    output wire [31:0]  if_dec0_instr,
-    output wire         if_dec0_bp,
-    output wire [1:0]   if_dec0_bp_track,
-    output wire [63:0]  if_dec0_bt,
+    <% gen_port("if_dec0", if_dec_t, reg=False) %>
     output wire         if_dec0_valid,
-    output wire         if_dec0_page_fault,
     input  wire         if_dec_ready,
     // Next PC
     // Exception and CSR induced control flow change are not tracked by BP
@@ -249,10 +236,10 @@ module ifp(
     wire [`BHT_ABITS-1:0] bp_p2_update_index = bp_gsh_update_index;
     wire [`BHT_ABITS-1:0] bp_p2_index = bp_gsh_index;
     
-    wire [1:0] bp_p1_counter_hi;
-    wire [1:0] bp_p1_counter_lo;
-    wire [1:0] bp_p2_counter_hi;
-    wire [1:0] bp_p2_counter_lo;
+    wire bp_p1_hi;
+    wire bp_p1_lo;
+    wire bp_p2_hi;
+    wire bp_p2_lo;
 
     bp_base p1(
         .clk(clk),
@@ -264,8 +251,8 @@ module ifp(
         .bp_init_index(bp_init_index),
         .bp_index(bp_p1_index),
         .bp_update_index(bp_p1_update_index),
-        .bp_counter_hi(bp_p1_counter_hi),
-        .bp_counter_lo(bp_p1_counter_lo)
+        .bp_hi(bp_p1_hi),
+        .bp_lo(bp_p1_lo)
     );
 
     bp_base p2(
@@ -278,18 +265,18 @@ module ifp(
         .bp_init_index(bp_init_index),
         .bp_index(bp_p2_index),
         .bp_update_index(bp_p2_update_index),
-        .bp_counter_hi(bp_p2_counter_hi),
-        .bp_counter_lo(bp_p2_counter_lo)
+        .bp_hi(bp_p2_hi),
+        .bp_lo(bp_p2_lo)
     );
 
     // Selector
-    wire [`BHT_ABITS-1:0] bp_sel_update_index = ip_if_branch_pc[`BHT_ABITS+1:2];
-    wire [`BHT_ABITS-1:0] bp_sel_index = next_pc[`BHT_ABITS+1:2];
+    wire [`BHT_ABITS-1:0] bp_sel_update_index = bp_gsh_update_index;
+    wire [`BHT_ABITS-1:0] bp_sel_index = bp_gsh_index;
     wire bp_sel_update;
     wire bp_sel_update_val; // 0 - leaning towards P1, 1 - leaning towards P2
     
-    wire [1:0] bp_sel_counter_hi;
-    wire [1:0] bp_sel_counter_lo;
+    wire bp_sel_hi;
+    wire bp_sel_lo;
     bp_base bp_selector (
         .clk(clk),
         .rst(rst),
@@ -300,11 +287,12 @@ module ifp(
         .bp_init_index(bp_init_index),
         .bp_index(bp_sel_index),
         .bp_update_index(bp_sel_update_index),
-        .bp_counter_hi(bp_sel_counter_hi),
-        .bp_counter_lo(bp_sel_counter_lo)
+        .bp_hi(bp_sel_hi),
+        .bp_lo(bp_sel_lo)
     );
 
-    /*always @(posedge clk) begin
+    `ifdef BPU_DEBUG
+    always @(posedge clk) begin
         if (ip_if_branch) begin
             if (bp_p1_correct) begin
                 $display("P1 was correct");
@@ -325,7 +313,8 @@ module ifp(
                 $display("Not updating selector from %b", ip_if_branch_track);
             end
         end
-    end*/
+    end
+    `endif
 
     // Update when predictors results diverge
     assign bp_sel_update = ip_if_branch &&
@@ -334,21 +323,19 @@ module ifp(
     wire bp_p2_correct = ip_if_branch_track[0] == ip_if_branch_taken;
     assign bp_sel_update_val = bp_p2_correct; // Used only when results diverge
 
-    wire [1:0] bp_counter_hi = bp_sel_counter_hi[1] ?
-            bp_p2_counter_hi : bp_p1_counter_hi;
-    wire [1:0] bp_counter_lo = bp_sel_counter_lo[1] ?
-            bp_p2_counter_lo : bp_p1_counter_lo;
+    wire bp_hi = bp_sel_hi ? bp_p2_hi : bp_p1_hi;
+    wire bp_lo = bp_sel_lo ? bp_p2_lo : bp_p1_lo;
     /*wire [1:0] bp_counter_hi = bp_p2_counter_hi;
     wire [1:0] bp_counter_lo = bp_p2_counter_lo;*/
-    wire bp_result_hi = bp_counter_hi[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
-    wire bp_result_lo = bp_counter_lo[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
-    wire [1:0] bp_track_hi = {bp_p1_counter_hi[1], bp_p2_counter_hi[1]};
-    wire [1:0] bp_track_lo = {bp_p1_counter_lo[1], bp_p2_counter_lo[1]};
+    wire bp_result_hi = bp_hi ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire bp_result_lo = bp_lo ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire [1:0] bp_track_hi = {bp_p1_hi, bp_p2_hi};
+    wire [1:0] bp_track_lo = {bp_p1_lo, bp_p2_lo};
 
     `else
 
-    wire [1:0] bp_counter_hi;
-    wire [1:0] bp_counter_lo;
+    wire bp_hi;
+    wire bp_lo;
     bp_base bp(
         .clk(clk),
         .rst(rst),
@@ -359,11 +346,11 @@ module ifp(
         .bp_init_index(bp_init_index),
         .bp_index(bp_index),
         .bp_update_index(bp_update_index),
-        .bp_counter_hi(bp_counter_hi),
-        .bp_counter_lo(bp_counter_lo)
+        .bp_hi(bp_hi),
+        .bp_lo(bp_lo)
     );
-    wire bp_result_hi = bp_counter_hi[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
-    wire bp_result_lo = bp_counter_lo[1] ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire bp_result_hi = bp_hi ? `BP_TAKEN : `BP_NOT_TAKEN;
+    wire bp_result_lo = bp_lo ? `BP_TAKEN : `BP_NOT_TAKEN;
     wire [1:0] bp_track_hi = 2'b0;
     wire [1:0] bp_track_lo = 2'b0;
     `endif
@@ -455,7 +442,8 @@ module ifp(
     wire f1_bp_hi = (bp_result_hi == `BP_TAKEN) && (btb_hit_hi);
     wire f1_bp = insn_both_branch ? f1_bp_lo : (f1_bp_hi || f1_bp_lo);
 
-    /*always @(posedge clk) begin
+    `ifdef BPU_DEBUG
+    always @(posedge clk) begin
         if (bu_active) begin
             if (ifp_pc_override) begin
                 //
@@ -494,7 +482,8 @@ module ifp(
             else
                 $display("!PC %08x branch not taken", ip_if_branch_pc);
         end
-    end*/
+    end
+    `endif
 
     reg last_stalled;
     reg [63:0] pc_repeat;
@@ -612,13 +601,13 @@ module ifp(
     );
     /* verilator lint_on PINMISSING */
 
-    /*`ifdef VERBOSE
+    `ifdef IFU_VERBOSE
     always @(posedge clk) begin
         if (if_dec_valid && if_dec_ready) begin
             $display("IF %016x INSTR %08x", if_dec_pc, if_dec_instr);
         end
     end
-    `endif*/
+    `endif
 
     assign if_dec1_valid = fifo_valid && if_dec1_valid_fifo;
     assign if_dec0_valid = fifo_valid && if_dec0_valid_fifo;

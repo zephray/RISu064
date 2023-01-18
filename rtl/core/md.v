@@ -44,6 +44,7 @@ module md(
     output wire [4:0]   md_wb_dst,
     output wire [63:0]  md_wb_result,
     output wire [63:0]  md_wb_pc,
+    output wire         md_wb_wb_en,
     output wire         md_wb_valid,
     input  wire         md_wb_ready,
     // Pipeline flush
@@ -133,5 +134,7 @@ module md(
             abort_requested <= 1'b0;
         end
     end
+
+    assign md_wb_wb_en = 1'b1;
 
 endmodule

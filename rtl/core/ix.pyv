@@ -1,5 +1,3 @@
-`timescale 1ns / 1ps
-`default_nettype none
 //
 // RISu64
 // Copyright 2022 Wenting Zhang
@@ -22,94 +20,32 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
+`timescale 1ns / 1ps
 `include "defines.vh"
+`default_nettype none
+<% from risupylib import * %>
 
 module ix(
     input  wire         clk,
     input  wire         rst,
     input  wire         pipe_flush,
     // Register file interface
-    output wire [4:0]   rf_rsrc0,
-    input  wire [63:0]  rf_rdata0,
-    output wire [4:0]   rf_rsrc1,
-    input  wire [63:0]  rf_rdata1,
-    output wire [4:0]   rf_rsrc2,
-    input  wire [63:0]  rf_rdata2,
-    output wire [4:0]   rf_rsrc3,
-    input  wire [63:0]  rf_rdata3,
+    <% gen_port("rf", reverse(rf_rd_t), count=REG_RD_PORTS, reg=False) %>
     // IX interface
-    input  wire [247:0] dec0_ix_bundle,
-    input  wire         dec0_ix_valid,
-    output wire         dec0_ix_ready,
-    input  wire [247:0] dec1_ix_bundle,
-    input  wire         dec1_ix_valid,
-    output wire         dec1_ix_ready,
+    <% gen_port("dec0_ix", reverse(handshake(dec_instr_t)), reg=False) %>
+    <% gen_port("dec1_ix", reverse(handshake(dec_instr_t)), reg=False) %>
     // FU interfaces
     // To integer pipe 0
-    output reg  [63:0]  ix_ip0_pc,
-    output reg  [4:0]   ix_ip0_dst,
-    output reg          ix_ip0_wb_en,
-    output reg  [3:0]   ix_ip0_op,
-    output reg          ix_ip0_option,
-    output reg          ix_ip0_truncate,
-    output reg  [1:0]   ix_ip0_br_type,
-    output reg          ix_ip0_br_neg,
-    output reg  [63:0]  ix_ip0_br_base,
-    output reg  [20:0]  ix_ip0_br_offset,
-    output reg          ix_ip0_br_is_call,
-    output reg          ix_ip0_br_is_ret,
-    output reg  [63:0]  ix_ip0_operand1,
-    output reg  [63:0]  ix_ip0_operand2,
-    output reg          ix_ip0_bp,
-    output reg  [1:0]   ix_ip0_bp_track,
-    output reg  [63:0]  ix_ip0_bt,
-    output reg          ix_ip0_valid,
-    input  wire         ix_ip0_ready,
-    // Hazard detection & Bypassing
-    input  wire [63:0]  ip0_ix_forwarding,
-    input  wire [4:0]   ip0_wb_dst,
-    input  wire [63:0]  ip0_wb_result,
-    input  wire         ip0_wb_wb_en,
-    input  wire         ip0_wb_valid,
+    <% gen_port("ix_ip0", handshake(ix_ip_t), reg=True) %>
     // To integer pipe 1
-    output reg  [63:0]  ix_ip1_pc,
-    output reg  [4:0]   ix_ip1_dst,
-    output reg          ix_ip1_wb_en,
-    output reg  [3:0]   ix_ip1_op,
-    output reg          ix_ip1_option,
-    output reg          ix_ip1_truncate,
-    output reg  [1:0]   ix_ip1_br_type,
-    output reg          ix_ip1_br_neg,
-    output reg  [63:0]  ix_ip1_br_base,
-    output reg  [20:0]  ix_ip1_br_offset,
-    output reg          ix_ip1_br_is_call,
-    output reg          ix_ip1_br_is_ret,
-    output reg  [63:0]  ix_ip1_operand1,
-    output reg  [63:0]  ix_ip1_operand2,
-    output reg          ix_ip1_bp,
-    output reg  [1:0]   ix_ip1_bp_track,
-    output reg  [63:0]  ix_ip1_bt,
-    output reg          ix_ip1_speculate,
-    output reg          ix_ip1_valid,
-    input  wire         ix_ip1_ready,
+    <% gen_port("ix_ip1", handshake(ix_ip_t), reg=True) %>
     // Hazard detection & Bypassing
     input  wire [63:0]  ip1_ix_forwarding,
-    input  wire [4:0]   ip1_wb_dst,
-    input  wire [63:0]  ip1_wb_result,
-    input  wire         ip1_wb_wb_en,
-    input  wire         ip1_wb_valid,
+    input  wire [63:0]  ip0_ix_forwarding,
+    <% gen_port("ip0_wb", reverse(wb_t)) %>
+    <% gen_port("ip1_wb", reverse(wb_t)) %>
     // To load/ store pipe
-    output reg  [63:0]  ix_lsp_pc,
-    output reg  [4:0]   ix_lsp_dst,
-    output reg          ix_lsp_wb_en,
-    output reg  [63:0]  ix_lsp_base,
-    output reg  [11:0]  ix_lsp_offset,
-    output reg  [63:0]  ix_lsp_source,
-    output reg          ix_lsp_mem_sign,
-    output reg  [1:0]   ix_lsp_mem_width,
-    output reg          ix_lsp_speculate,
-    output reg          ix_lsp_valid,
-    input  wire         ix_lsp_ready,
+    <% gen_port("ix_lsp", handshake(ix_lsp_t)) %>
     input  wire         lsp_unaligned_load,
     input  wire         lsp_unaligned_store,
     input  wire [63:0]  lsp_unaligned_epc,
@@ -124,30 +60,12 @@ module ix(
     input  wire         lsp_wb_wb_en,
     input  wire         lsp_wb_valid,
     // To muldiv unit
-    output reg  [63:0]  ix_md_pc,
-    output reg  [4:0]   ix_md_dst,
-    output reg  [63:0]  ix_md_operand1,
-    output reg  [63:0]  ix_md_operand2,
-    output reg  [2:0]   ix_md_md_op,
-    output reg          ix_md_muldiv,
-    output reg          ix_md_speculate,
-    output reg          ix_md_valid,
-    input  wire         ix_md_ready,
+    <% gen_port("ix_md", handshake(ix_md_t)) %>
     // Hazard detection
     input  wire [4:0]   md_ix_dst,
     input  wire         md_ix_active,
     // To trap unit
-    output reg  [63:0]  ix_trap_pc,
-    output reg  [4:0]   ix_trap_dst,
-    output reg  [1:0]   ix_trap_csr_op,
-    output reg  [11:0]  ix_trap_csr_id,
-    output reg  [63:0]  ix_trap_csr_opr,
-    output reg          ix_trap_mret,
-    output reg          ix_trap_int,
-    output reg          ix_trap_intexc,
-    output reg  [3:0]   ix_trap_cause,
-    output reg          ix_trap_valid,
-    input  wire         ix_trap_ready,
+    <% gen_port("ix_trap", handshake(ix_trap_t)) %>
     input  wire [15:0]  trap_ix_ip,
     // From WB
     input  wire [63:0]  wb_ix_buf_value,
@@ -166,137 +84,6 @@ module ix(
     output reg          ix_if_pc_override,
     output reg  [63:0]  ix_if_new_pc
 );
-
-    // Unbundle signals
-    wire [63:0] dec0_ix_pc;
-    wire        dec0_ix_bp;
-    wire [1:0]  dec0_ix_bp_track;
-    wire [63:0] dec0_ix_bt;
-    wire [3:0]  dec0_ix_op;
-    wire        dec0_ix_option;
-    wire        dec0_ix_truncate;
-    wire [1:0]  dec0_ix_br_type;
-    wire        dec0_ix_br_neg;
-    wire        dec0_ix_br_base_src;
-    wire        dec0_ix_br_inj_pc;
-    wire        dec0_ix_br_is_call;
-    wire        dec0_ix_br_is_ret;
-    wire        dec0_ix_mem_sign;
-    wire [1:0]  dec0_ix_mem_width;
-    wire [1:0]  dec0_ix_csr_op;
-    wire        dec0_ix_mret;
-    wire        dec0_ix_intr;
-    wire [3:0]  dec0_ix_cause;
-    wire [2:0]  dec0_ix_md_op;
-    wire        dec0_ix_muldiv;
-    wire [2:0]  dec0_ix_op_type;
-    wire [1:0]  dec0_ix_operand1;
-    wire [1:0]  dec0_ix_operand2;
-    wire [63:0] dec0_ix_imm;
-    wire        dec0_ix_legal;
-    wire        dec0_ix_wb_en;
-    wire [4:0]  dec0_ix_rs1;
-    wire [4:0]  dec0_ix_rs2;
-    wire [4:0]  dec0_ix_rd;
-    wire        dec0_ix_fencei;
-
-    wire [63:0] dec1_ix_pc;
-    wire        dec1_ix_bp;
-    wire [1:0]  dec1_ix_bp_track;
-    wire [63:0] dec1_ix_bt;
-    wire [3:0]  dec1_ix_op;
-    wire        dec1_ix_option;
-    wire        dec1_ix_truncate;
-    wire [1:0]  dec1_ix_br_type;
-    wire        dec1_ix_br_neg;
-    wire        dec1_ix_br_base_src;
-    wire        dec1_ix_br_inj_pc;
-    wire        dec1_ix_br_is_call;
-    wire        dec1_ix_br_is_ret;
-    wire        dec1_ix_mem_sign;
-    wire [1:0]  dec1_ix_mem_width;
-    wire [1:0]  dec1_ix_csr_op;
-    wire        dec1_ix_mret;
-    wire        dec1_ix_intr;
-    wire [3:0]  dec1_ix_cause;
-    wire [2:0]  dec1_ix_md_op;
-    wire        dec1_ix_muldiv;
-    wire [2:0]  dec1_ix_op_type;
-    wire [1:0]  dec1_ix_operand1;
-    wire [1:0]  dec1_ix_operand2;
-    wire [63:0] dec1_ix_imm;
-    wire        dec1_ix_legal;
-    wire        dec1_ix_wb_en;
-    wire [4:0]  dec1_ix_rs1;
-    wire [4:0]  dec1_ix_rs2;
-    wire [4:0]  dec1_ix_rd;
-    wire        dec1_ix_fencei;
-
-    assign {
-        dec0_ix_pc,
-        dec0_ix_bp,
-        dec0_ix_bp_track,
-        dec0_ix_bt,
-        dec0_ix_op,
-        dec0_ix_option,
-        dec0_ix_truncate,
-        dec0_ix_br_type,
-        dec0_ix_br_neg,
-        dec0_ix_br_base_src,
-        dec0_ix_br_inj_pc,
-        dec0_ix_br_is_call,
-        dec0_ix_br_is_ret,
-        dec0_ix_mem_sign,
-        dec0_ix_mem_width,
-        dec0_ix_csr_op,
-        dec0_ix_mret,
-        dec0_ix_intr,
-        dec0_ix_cause,
-        dec0_ix_md_op,
-        dec0_ix_muldiv,
-        dec0_ix_op_type,
-        dec0_ix_operand1,
-        dec0_ix_operand2,
-        dec0_ix_imm,
-        dec0_ix_legal,
-        dec0_ix_wb_en,
-        dec0_ix_rs1,
-        dec0_ix_rs2,
-        dec0_ix_rd,
-        dec0_ix_fencei} = dec0_ix_bundle;
-    
-    assign {
-        dec1_ix_pc,
-        dec1_ix_bp,
-        dec1_ix_bp_track,
-        dec1_ix_bt,
-        dec1_ix_op,
-        dec1_ix_option,
-        dec1_ix_truncate,
-        dec1_ix_br_type,
-        dec1_ix_br_neg,
-        dec1_ix_br_base_src,
-        dec1_ix_br_inj_pc,
-        dec1_ix_br_is_call,
-        dec1_ix_br_is_ret,
-        dec1_ix_mem_sign,
-        dec1_ix_mem_width,
-        dec1_ix_csr_op,
-        dec1_ix_mret,
-        dec1_ix_intr,
-        dec1_ix_cause,
-        dec1_ix_md_op,
-        dec1_ix_muldiv,
-        dec1_ix_op_type,
-        dec1_ix_operand1,
-        dec1_ix_operand2,
-        dec1_ix_imm,
-        dec1_ix_legal,
-        dec1_ix_wb_en,
-        dec1_ix_rs1,
-        dec1_ix_rs2,
-        dec1_ix_rd,
-        dec1_ix_fencei} = dec1_ix_bundle;
 
     // Hazard detection
     assign rf_rsrc0 = dec0_ix_rs1;
@@ -536,7 +323,7 @@ module ix(
             (!dec0_ix_wb_en || (
                 ((dec0_ix_rd != dec1_ix_rs1) || (dec1_ix_operand1 != `D_OPR1_RS1)) &&
                 ((dec0_ix_rd != dec1_ix_rs2) || (dec1_ix_operand2 != `D_OPR2_RS2)))) &&
-            (!dec0_is_branch || dec1_is_int || dec1_is_md);
+            (!dec0_is_branch || dec1_is_int || dec1_is_md || dec1_is_load);
     // Issue logic
 
     wire ix_fenced_done = !(lsp_ag_active || lsp_mem_active || lsp_wb_active);
@@ -792,9 +579,9 @@ module ix(
             ix_trap_valid <= 1'b1;
             trap_ongoing <= 1'b1;
         end
-        // But this is affected by pipe flush. If the pipeline is being flushed,
-        // Not handled exceptions are not valid
         else if (exc_pending && !pipe_flush) begin
+            // But this is affected by pipe flush. If the pipeline is being
+            // flushed, not handled exceptions are not valid
             ix_trap_pc <= lsp_fault ? lsp_unaligned_epc : mmu_fault_epc;
             ix_trap_mret <= 1'b0;
             ix_trap_int <= 1'b1;
@@ -841,5 +628,10 @@ module ix(
             ix_trap_valid <= 1'b0;
             trap_ongoing <= 1'b0;
         end
+    end
+
+    always @(*) begin
+        // Tie-off
+        ix_ip0_speculate = 1'b0;
     end
 endmodule

@@ -1,0 +1,421 @@
+//
+// RISu64
+// Copyright 2022 Wenting Zhang
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+`timescale 1ns / 1ps
+`include "defines.vh"
+`default_nettype none
+<% from risupylib import * %>
+
+// This is a fully combinational unit
+module du(
+    // Instruction for decoding
+    <% gen_port("if", reverse(if_dec_t)) %>
+    // Decoder output 
+    <% gen_port("dec", dec_instr_t, last_comma=False) %>
+);
+    // Rename signal
+    wire [31:0] instr = if_instr;
+
+    // Extract bit-fields
+    wire [6:0] funct7 = instr[31:25];
+    wire [2:0] funct3 = instr[14:12];
+    wire [6:0] opcode = instr[6:0];
+    always @(*) begin
+        dec_rs2 = instr[24:20];
+        dec_rs1 = instr[19:15];
+        dec_rd = instr[11:7];
+    end
+
+    // Pass-through signals
+    always @(*) begin
+        dec_pc = if_pc;
+        dec_bp = if_bp;
+        dec_bp_track = if_bp_track;
+        dec_bt = if_bt;
+        dec_page_fault = if_page_fault;
+    end
+
+    // Decode known instructions
+
+    wire [63:0] imm_i_type = {{52{instr[31]}}, instr[31:20]};
+    wire [63:0] imm_s_type = {{52{instr[31]}}, instr[31:25], instr[11:7]};
+    wire [63:0] imm_b_type = {{51{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
+    wire [63:0] imm_u_type = {{32{instr[31]}}, instr[31:12], 12'b0};
+    wire [63:0] imm_j_type = {{43{instr[31]}}, instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
+
+    always @(*) begin
+        dec_legal = 1'b0;
+        dec_op = 4'bx;
+        dec_option = 1'bx;
+        dec_truncate = 1'bx;
+        dec_mem_sign = 1'bx;
+        dec_mem_width = 2'bx;
+        dec_br_type = 2'bx;
+        dec_br_neg = 1'bx;
+        dec_br_base_src = 1'bx;
+        dec_br_inj_pc = 1'b0;
+        dec_br_is_call = 1'bx;
+        dec_br_is_ret = 1'bx;
+        dec_csr_op = 2'bx;
+        dec_mret = 1'bx;
+        dec_intr = 1'bx;
+        dec_cause = 4'bx;
+        dec_md_op = 3'bx;
+        dec_muldiv = 1'bx;
+        dec_op_type = 3'bx;
+        dec_operand1 = 2'bx;
+        dec_operand2 = 2'bx;
+        dec_imm = 64'bx;
+        dec_wb_en = 1'bx;
+        dec_fencei = 1'bx;
+
+        /* verilator lint_off CASEINCOMPLETE */
+        case (opcode)
+        /* verilator lint_on CASEINCOMPLETE */
+        // RV-I
+        // Int pipe instructions
+        `OP_LUI: begin
+            dec_op_type = `OT_INT;
+            dec_op = `ALU_ADDSUB;
+            dec_option = `ALUOPT_ADD;
+            dec_imm = imm_u_type;
+            dec_operand1 = `D_OPR1_ZERO;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_br_type = `BT_NONE;
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+        end
+        `OP_AUIPC: begin
+            dec_op_type = `OT_INT;
+            dec_op = `ALU_ADDSUB;
+            dec_option = `ALUOPT_ADD;
+            dec_imm = imm_u_type;
+            dec_operand1 = `D_OPR1_PC;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_br_type = `BT_NONE;
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+        end
+        `OP_INTIMM: begin
+            dec_op_type = `OT_INT;
+            dec_op = {1'b0, funct3};
+            if (funct3 == 3'b101)
+                dec_option = funct7[5];
+            else
+                dec_option = 1'b0;
+            dec_imm = imm_i_type;
+            dec_operand1 = `D_OPR1_RS1;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_br_type = `BT_NONE;
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+            if ((funct3 == 3'b001) && (funct7[6:1] != 6'd0))
+                dec_legal = 1'b0;
+            if ((funct3 == 3'b101) &&
+                    ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0)))
+                dec_legal = 1'b0;
+        end
+        `OP_INTREG: begin
+            if (funct7 == 7'b0000001) begin
+                `ifdef ENABLE_M_EXT
+                dec_op_type = `OT_MULDIV;
+                dec_operand1 = `D_OPR1_RS1;
+                dec_operand2 = `D_OPR2_RS2;
+                dec_md_op = {1'b0, funct3[1:0]};
+                dec_muldiv = funct3[2];
+                dec_wb_en = 1'b1;
+                dec_legal = 1'b1;
+                `else
+                dec_legal = 1'b0;
+                `endif
+            end
+            else begin
+                dec_op_type = `OT_INT;
+                dec_op = {1'b0, funct3};
+                dec_option = funct7[5];
+                dec_operand1 = `D_OPR1_RS1;
+                dec_operand2 = `D_OPR2_RS2;
+                dec_br_type = `BT_NONE;
+                dec_truncate = 1'b0;
+                dec_wb_en = 1'b1;
+                dec_legal = 1'b1;
+                if ((funct3 != 3'b000) && (funct3 != 3'b101)) begin
+                    if (funct7 != 7'b0)
+                        dec_legal = 1'b0;
+                end
+                else begin
+                    if ((funct7[6] != 1'b0) || (funct7[4:1] != 4'd0))
+                        dec_legal = 1'b0;
+                end
+            end
+        end
+        `OP_INTIMMW: begin
+            dec_op_type = `OT_INT;
+            dec_op = {1'b0, funct3};
+            if (funct3 == 3'b101)
+                dec_option = funct7[5];
+            else
+                dec_option = 1'b0;
+            dec_imm = imm_i_type;
+            dec_operand1 = `D_OPR1_RS1;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_br_type = `BT_NONE;
+            dec_truncate = 1'b1;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+            if (funct3 == 3'b001) begin
+                if (funct7 != 7'b0)
+                    dec_legal = 1'b0;
+            end
+            else if (funct3 == 3'b101) begin
+                if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
+                    dec_legal = 1'b0;
+            end
+            else if (funct3 != 3'b000) begin
+                dec_legal = 1'b0;
+            end
+        end
+        `OP_INTREGW: begin
+            if (funct7 == 7'b0000001) begin
+                `ifdef ENABLE_M_EXT
+                dec_op_type = `OT_MULDIV;
+                dec_operand1 = `D_OPR1_RS1;
+                dec_operand2 = `D_OPR2_RS2;
+                dec_md_op = {1'b1, funct3[1:0]};
+                dec_muldiv = funct3[2];
+                dec_wb_en = 1'b1;
+                dec_legal = ((funct3 != 3'b001) && (funct3 != 3'b010) &&
+                        (funct3 != 3'b011));
+                `else
+                dec_legal = 1'b0;
+                `endif
+            end
+            else begin
+                dec_op_type = `OT_INT;
+                dec_op = {1'b0, funct3};
+                dec_option = funct7[5];
+                dec_operand1 = `D_OPR1_RS1;
+                dec_operand2 = `D_OPR2_RS2;
+                dec_br_type = `BT_NONE;
+                dec_truncate = 1'b1;
+                dec_wb_en = 1'b1;
+                dec_legal = 1'b1;
+                if ((funct3 == 3'b000) || (funct3 == 3'b101)) begin
+                    if ((funct7[6] != 1'b0) || (funct7[4:0] != 5'd0))
+                        dec_legal = 1'b0;
+                end
+                else if (funct3 == 3'b001) begin
+                    if (funct7 != 7'b0)
+                        dec_legal = 1'b0;
+                end
+                else begin
+                    // 32-bit multiplications
+                    dec_legal = 1'b0;
+                end
+            end
+        end
+        // Branching instructions, executed by integer pipe
+        `OP_JAL: begin
+            dec_op_type = `OT_BRANCH;
+            dec_op = `ALU_ADDSUB;
+            dec_option = `ALUOPT_ADD;
+            dec_imm = imm_j_type;
+            dec_operand1 = `D_OPR1_PC;
+            dec_operand2 = `D_OPR2_4;
+            dec_br_type = `BT_JAL;
+            dec_br_base_src = `BB_PC;
+            dec_br_inj_pc = 1'b0;
+            dec_br_is_call = (dec_rd == 1);
+            dec_br_is_ret = 0;
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+        end
+        `OP_JALR: begin
+            dec_op_type = `OT_BRANCH;
+            dec_op = `ALU_ADDSUB;
+            dec_option = `ALUOPT_ADD;
+            dec_imm = imm_i_type;
+            dec_operand1 = `D_OPR1_RS1; // For dependency check
+            dec_operand2 = `D_OPR2_4;
+            dec_br_type = `BT_JALR;
+            dec_br_base_src = `BB_RS1;
+            dec_br_inj_pc = 1'b1;
+            dec_br_is_call = (dec_rd == 1);
+            dec_br_is_ret = (dec_rd == 0) && (dec_rs1 == 1);
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+        end
+        `OP_BRANCH: begin
+            dec_op_type = `OT_BRANCH;
+            //op = funct3;
+            dec_option = 1'b0;
+            // br_neg: 0: 1-takes branch; 1: 0-takes branch
+            {dec_op, dec_br_neg} =
+                (funct3 == `BC_EQ) ? ({`ALU_EQ, 1'b0}) :
+                (funct3 == `BC_NE) ? ({`ALU_EQ, 1'b1}) :
+                (funct3 == `BC_LT) ? ({`ALU_SLT, 1'b0}) :
+                (funct3 == `BC_GE) ? ({`ALU_SLT, 1'b1}) :
+                (funct3 == `BC_LTU) ? ({`ALU_SLTU, 1'b0}) :
+                (funct3 == `BC_GEU) ? ({`ALU_SLTU, 1'b1}) : 5'bx;
+            dec_imm = imm_b_type;
+            dec_operand1 = `D_OPR1_RS1;
+            dec_operand2 = `D_OPR2_RS2;
+            dec_br_type = `BT_BCOND;
+            dec_br_base_src = `BB_PC;
+            dec_br_inj_pc = 1'b0;
+            dec_truncate = 1'b0;
+            dec_wb_en = 1'b0;
+            dec_legal = 1'b1;
+            if ((funct3 == 3'b010) || (funct3 == 3'b011))
+                dec_legal = 1'b0;
+        end
+        // LS pipe instructions
+        `OP_LOAD: begin
+            dec_op_type = `OT_LOAD;
+            dec_mem_sign = funct3[2];
+            dec_mem_width = funct3[1:0];
+            dec_operand1 = `D_OPR1_RS1;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_imm = imm_i_type;
+            dec_wb_en = 1'b1;
+            dec_legal = 1'b1;
+            if (funct3 == 3'b111)
+                dec_legal = 1'b0;
+        end
+        `OP_STORE: begin
+            dec_op_type = `OT_STORE;
+            dec_mem_sign = funct3[2];
+            dec_mem_width = funct3[1:0];
+            dec_operand1 = `D_OPR1_RS1;
+            dec_operand2 = `D_OPR2_RS2;
+            dec_imm = imm_s_type;
+            dec_wb_en = 1'b0;
+            dec_legal = 1'b1;
+            if (funct3[2] == 1'b1)
+                dec_legal = 1'b0;
+        end
+        `OP_FENCE: begin
+            dec_op_type = `OT_FENCE;
+            if ((instr[31:28] == 4'd0) && (instr[19:7] == 13'd0)) begin
+                // fence
+                dec_fencei = 1'b0;
+                dec_legal = 1'b1;
+            end
+            else if (instr[31:7] == 25'b0000000000000000000100000) begin
+                // Zifencei
+                dec_fencei = 1'b1;
+                dec_legal = 1'b1;
+            end
+            else begin
+                dec_legal = 1'b0;
+            end
+        end
+        // Trap pipe instructions
+        `OP_ENVCSR: begin
+            dec_op_type = `OT_TRAP;
+            dec_legal = 1'b1;
+            if (funct3 == 3'b000) begin
+                if (instr[31:7] == 25'b0000000000010000000000000) begin
+                    // ebreak
+                    dec_cause = `MCAUSE_BRKPOINT;
+                    dec_intr = 1'b1;
+                    dec_mret = 1'b0;
+                end
+                else if (instr[31:7] == 25'b0000000000000000000000000) begin
+                    // ecall
+                    dec_cause = `MCAUSE_ECALLMM;
+                    dec_intr = 1'b1;
+                    dec_mret = 1'b0;
+                end
+                else if (instr[31:7] == 25'b0011000000100000000000000) begin
+                    // mret
+                    dec_mret = 1'b1;
+                    dec_intr = 1'b0;
+                end
+                else if ((funct7 == 7'b0001001) && (dec_rd == 5'd0)) begin
+                    // sfence.vma
+                    // Currently handle it as if it's a fence.
+                    dec_op_type = `OT_FENCE;
+                    dec_fencei = 1'b0;
+                end
+                else begin
+                    // Unknown or unsupported instruction
+                    dec_legal = 1'b0;
+                end
+            end
+            else begin
+                // Zicsr
+                dec_csr_op = funct3[1:0];
+                if ((funct3 == {1'b0, `CSR_RS}) && (dec_rs1 == 5'd0))
+                    dec_csr_op = `CSR_RD;
+                dec_operand1 = (funct3[2] == 1'b1) ? `D_OPR1_ZIMM : `D_OPR1_RS1;
+                dec_operand2 = `D_OPR2_IMM;
+                dec_imm = imm_i_type;
+                dec_intr = 1'b0;
+                dec_mret = 1'b0;
+                dec_wb_en = 1'b1;
+                if (funct3[1:0] == 2'd0) begin
+                    dec_legal = 1'b0;
+                end
+            end
+        end
+        /*`OP_ENVCSR: begin
+            dec_op_type = `OT_TRAP;
+            // Decode as nop for now
+            dec_operand1 = `D_OPR1_ZERO;
+            dec_operand2 = `D_OPR2_IMM;
+            dec_option = (instr == 32'h00000073);
+            dec_imm = 64'bx;
+            dec_wb_en = 1'b0;
+            dec_legal = 1'b1;
+        end*/
+        // RV-A
+
+        // RV-F
+
+        // RV-D
+        endcase
+
+        // Handling illegal instruction
+        if (!dec_legal) begin
+            // Send them to CSR pipe
+            dec_op_type = `OT_TRAP;
+            dec_cause = `MCAUSE_ILLEGALI;
+            dec_intr = 1'b1;
+            dec_mret = 1'b0;
+        end
+
+        // Handle page fault
+        if (if_page_fault) begin
+            dec_op_type = `OT_TRAP;
+            dec_cause = `MCAUSE_IPGFAULT;
+            dec_intr = 1'b1;
+            dec_mret = 1'b0;
+        end
+    end
+
+endmodule

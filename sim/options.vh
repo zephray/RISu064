@@ -23,6 +23,8 @@
 // SOFTWARE.
 //
 
+// Options for simulation
+
 // System options
 //`define USE_L1_CACHE
 
@@ -31,8 +33,10 @@
 `define BTB_DEPTH       32
 
 // Cache block size, each block is 64
-`define CACHE_BLOCK         256
-`define CACHE_BLOCK_ABITS   8
+`define CACHE_BLOCK         128
+`define CACHE_BLOCK_ABITS   7
+`define CACHE_META_RAM_PRIM ram_128_23
+`define CACHE_DATA_RAM_PRIM ram_512_64
 
 // 2**BHT_ABITS == BHT_DEPTH
 `define BHT_ABITS       12
@@ -44,10 +48,10 @@
 // Branch predictor
 //`define BPU_ALWAYS_NOT_TAKEN
 //`define BPU_ALWAYS_TAKEN
-//`define BPU_GLOBAL_BIMODAL
+`define BPU_GLOBAL_BIMODAL
 //`define BPU_GLOBAL_GSHARE
 //`define BPU_GLOBAL_GSELECT
-`define BPU_TOURNAMENT
+//`define BPU_TOURNAMENT
 
 `ifdef BPU_GLOBAL_BIMODAL
     `define BPU_GLOBAL
@@ -56,10 +60,10 @@
     `define BPU_GHR_WIDTH   3
 `elsif BPU_GLOBAL_GSHARE
     `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
+    `define BPU_GHR_WIDTH   (`BHT_ABITS - 1)
 `elsif BPU_TOURNAMENT
     `define BPU_GLOBAL
-    `define BPU_GHR_WIDTH   `BHT_ABITS
+    `define BPU_GHR_WIDTH   (`BHT_ABITS - 1)
 `endif
 
 // 2**RAS_DEPTH_BITS == RAS_DEPTH
@@ -75,3 +79,7 @@
 
 `define TLB_ABITS       2
 `define TLB_ENTRIES     4
+
+// ROB
+`define ROB_DEPTH       32
+`define ROB_ABITS       5

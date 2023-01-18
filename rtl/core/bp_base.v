@@ -34,8 +34,8 @@ module bp_base(
     input  wire [`BHT_MEM_ABITS-1:0]    bp_init_index,
     input  wire [`BHT_ABITS-1:0]        bp_index,
     input  wire [`BHT_ABITS-1:0]        bp_update_index,
-    output wire [1:0]                   bp_counter_lo,
-    output wire [1:0]                   bp_counter_hi
+    output wire                         bp_lo,
+    output wire                         bp_hi
 );
 
     wire [`BHT_MEM_ABITS-1:0] bp_wr_index;
@@ -44,7 +44,9 @@ module bp_base(
     wire [7:0] bp_mem_rd_data;
     wire [1:0] bp_update_counter;
     wire [7:0] bp_counter;
+    /* verilator lint_off UNUSED */
     wire [3:0] bp_counter_hilo;
+    /* verilator lint_on UNUSED */
     reg bp_hilo;
     /*ram_1024_8 bpu_ram(*/
     `ifdef BHT_RAM_PRIM
@@ -69,8 +71,8 @@ module bp_base(
     end
 
     assign bp_counter_hilo = (bp_hilo) ? bp_counter[7:4] : bp_counter[3:0];
-    assign bp_counter_hi = bp_counter_hilo[3:2];
-    assign bp_counter_lo = bp_counter_hilo[1:0];
+    assign bp_hi = bp_counter_hilo[3];
+    assign bp_lo = bp_counter_hilo[1];
     wire [1:0] bp_sel = bp_update_fifo_index[1:0];
     assign bp_update_counter =
             (bp_sel == 2'd0) ? bp_mem_rd_data[1:0] :

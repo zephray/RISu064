@@ -1,6 +1,8 @@
 .vscode/
 obj/
 obj_dir/
+__pycache__/
+genrtl/
 *.vcd
 simulator
 *.bin
@@ -9,3 +11,4 @@ simulator
 *.d
 *.o
 *.log
+*.gds

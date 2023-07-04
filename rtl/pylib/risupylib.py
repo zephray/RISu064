@@ -15,8 +15,8 @@ def reverse(type):
 
 def handshake(type):
     result = copy.deepcopy(type)
-    result.append(["i", "valid"])
-    result.append(["o", "ready"])
+    result.append(["o", "valid"])
+    result.append(["i", "ready"])
     return result
 
 def _get_pin(entry):

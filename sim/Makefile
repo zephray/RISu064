@@ -44,7 +44,7 @@ CPPSRCS += \
 	./memsim.cpp \
 	verilated.cpp \
 	verilated_vcd_c.cpp \
-	$(VERILATOR_ROOT)/include/verilated_threads.cpp
+	verilated_threads.cpp
 
 OBJS :=	$(CSRCS:%.c=$(OBJODIR)/%.o) \
 		$(CPPSRCS:%.cpp=$(OBJODIR)/%.o)

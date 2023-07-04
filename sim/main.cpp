@@ -204,7 +204,7 @@ void tick() {
             total_stall++;
         }*/
 
-        if (SIGNAL(ip_if_branch) && SIGNAL(ip0_wb_ready)) {
+        if (SIGNAL(ip_if_branch) && SIGNAL(ip0_wb_valid)) {
             branch_count++;
             if (SIGNAL(ip_if_branch_taken)) {
                 taken_count++;
